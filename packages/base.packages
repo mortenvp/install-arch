@@ -1,0 +1,22 @@
+# Minimal extras beyond base/base-devel
+# Keep this list to things you explicitly want on every fresh install.
+
+# Networking
+openssh
+
+# Quality of life
+ripgrep
+fd
+fzf
+btop
+zoxide
+fish
+
+# Apps
+bitwarden
+clang
+openai-codex
+visual-studio-code-bin
+warp-terminal
+yay
+google-chrome

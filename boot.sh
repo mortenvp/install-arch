@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Online install entry point (curl | bash)
+INSTALL_ARCH_ONLINE_INSTALL=true
+
+ansi_art='   ___           __        __        ___             __
+  / _ \___ ______/ /____ __/ /__ ____/ _ | _________ / /_
+ / ___/ _ `/ __/ _  / -_) _  / -_) __/ __ |/ __/ __/  \/
+/_/   \_,_/_/  \_,_/\__/\_,_/\__/_/ /_/ |_/_/  \__/_/\_\'
+
+clear
+printf "\n%s\n" "$ansi_art"
+
+sudo pacman -Syu --noconfirm --needed git
+
+# Default repo and install dir
+INSTALL_ARCH_REPO="mortenvp/install-arch"
+INSTALL_ARCH_DIR="$HOME/.local/share/install-arch"
+
+printf "\nCloning from: https://github.com/%s.git\n" "$INSTALL_ARCH_REPO"
+rm -rf "$INSTALL_ARCH_DIR"
+git clone "https://github.com/${INSTALL_ARCH_REPO}.git" "$INSTALL_ARCH_DIR" >/dev/null
+
+INSTALL_ARCH_REF="main"
+printf "\nUsing branch: %s\n" "$INSTALL_ARCH_REF"
+(
+  cd "$INSTALL_ARCH_DIR"
+  git fetch origin "$INSTALL_ARCH_REF" >/dev/null
+  git checkout "$INSTALL_ARCH_REF" >/dev/null
+)
+
+printf "\nInstallation starting...\n"
+"$INSTALL_ARCH_DIR/install.sh"
