@@ -16,7 +16,11 @@ fish
 bitwarden
 clang
 openai-codex
+opencode
 visual-studio-code-bin
 warp-terminal
 yay
 google-chrome
+tailscale
+vagrant
+virtualbox
