@@ -19,6 +19,64 @@ Run the top-level installer:
 ./install.sh
 ```
 
+## Test on a fresh Arch VM (Vagrant)
+
+Use the Vagrant environment in `testing/vagrant` to validate the install on a clean machine.
+This VM intentionally mounts no local folders, so the install is tested over the internet only.
+
+Prerequisites:
+- Vagrant
+- VirtualBox
+
+From the repository root:
+
+```bash
+cd testing/vagrant
+```
+
+Start from scratch each time:
+
+```bash
+vagrant destroy -f
+vagrant up
+```
+
+This recreates the VM from scratch for each test run.
+If you also want to force re-download of the base image:
+
+```bash
+vagrant destroy -f
+vagrant box remove archlinux/archlinux --provider virtualbox -f
+vagrant up
+```
+
+Run the full test cycle automatically (boot, install via internet, destroy VM instance):
+
+```bash
+./testing/run-vagrant-test.sh
+```
+
+SSH into the VM and run the installer:
+
+```bash
+vagrant ssh
+command -v curl >/dev/null || sudo pacman -Sy --noconfirm curl
+curl -fsSL https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh | bash
+```
+
+Exit the VM when done:
+
+```bash
+exit
+```
+
+Optional cleanup after testing:
+
+```bash
+cd testing/vagrant
+vagrant destroy -f
+```
+
 ## Online install (curl/wget)
 
 Like Omarchy, you can bootstrap with a single command (after publishing):

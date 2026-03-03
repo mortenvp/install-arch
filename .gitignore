@@ -1,0 +1,4 @@
+.vagrant/
+.vagrant.d/
+testing/vagrant/.vagrant/
+testing/vagrant/.vagrant.d/

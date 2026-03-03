@@ -1,0 +1,11 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/arch"
+  config.vm.hostname = "install-arch-test"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "install-arch-test"
+    vb.memory = 2048
+    vb.cpus = 2
+  end
+end
