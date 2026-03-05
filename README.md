@@ -9,6 +9,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `config/`: files copied into `~/.config/`.
 - `default/`: reserved for dotfiles copied to `$HOME` (currently unused).
 - `scripts/`: install/config helpers.
+  - Includes upstream installer wrappers for `lix`/`nix`, `devbox`, `uv`, and `tailscale`.
 - `install.sh`: main entry point.
 
 ## Install
@@ -94,9 +95,10 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 This will:
 1. Install pacman packages from `packages/base.packages`.
 2. Install AUR packages from `packages/aur.packages` (requires `yay`).
-3. Apply configs from `config/` and `default/`.
-4. Set the default shell to fish.
-5. Enable the Pop Shell GNOME extension (if GNOME + extension are present).
+3. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
+4. Apply configs from `config/` and `default/`.
+5. Set the default shell to fish.
+6. Enable the Pop Shell GNOME extension (if GNOME + extension are present).
 
 Skip optional steps:
 
@@ -109,6 +111,7 @@ SKIP_GNOME_EXTENSIONS=1 ./install.sh
 
 - Pacman: add to `packages/base.packages`.
 - AUR: add to `packages/aur.packages`.
+- Upstream tools: edit `scripts/install-upstream-tools.sh` and per-tool scripts in `scripts/`.
 
 Then run:
 

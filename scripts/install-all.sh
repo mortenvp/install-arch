@@ -10,3 +10,6 @@ log_step "Installing base packages"
 
 log_step "Installing AUR packages"
 "$SCRIPT_DIR/install-aur-packages.sh" "$SCRIPT_DIR/../packages/aur.packages"
+
+log_step "Installing upstream tools"
+"$SCRIPT_DIR/install-upstream-tools.sh"
