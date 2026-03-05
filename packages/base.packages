@@ -8,6 +8,7 @@ bluez-utils
 gnome-bluetooth-3.0
 
 # Quality of life
+less
 ripgrep
 fd
 fzf
