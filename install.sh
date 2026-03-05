@@ -17,6 +17,18 @@ else
   "$ROOT_DIR/scripts/apply-gnome-keybindings.sh"
 fi
 
+if [[ "${SKIP_GNOME_WORKSPACES:-}" == "1" ]]; then
+  log_step "Skipping GNOME workspace defaults (SKIP_GNOME_WORKSPACES=1)"
+else
+  "$ROOT_DIR/scripts/apply-gnome-workspaces.sh"
+fi
+
+if [[ "${SKIP_GNOME_THEME:-}" == "1" ]]; then
+  log_step "Skipping GNOME theme defaults (SKIP_GNOME_THEME=1)"
+else
+  "$ROOT_DIR/scripts/apply-gnome-theme.sh"
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"

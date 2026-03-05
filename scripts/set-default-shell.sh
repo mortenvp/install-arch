@@ -23,6 +23,12 @@ if [[ -z "$TARGET_USER" ]]; then
   exit 1
 fi
 
+current_shell=$(getent passwd "$TARGET_USER" | awk -F: '{print $7}')
+if [[ "$current_shell" == "$SHELL_PATH" ]]; then
+  log_step "Default shell already set to $SHELL_PATH for $TARGET_USER; skipping"
+  exit 0
+fi
+
 log_step "Setting default shell to $SHELL_PATH for $TARGET_USER"
 sudo usermod --shell "$SHELL_PATH" "$TARGET_USER"
 

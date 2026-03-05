@@ -21,4 +21,11 @@ if [[ ! -e /usr/lib/systemd/system/bluetooth.service && ! -e /etc/systemd/system
   exit 0
 fi
 
+is_enabled="$(systemctl is-enabled bluetooth.service 2>/dev/null || true)"
+is_active="$(systemctl is-active bluetooth.service 2>/dev/null || true)"
+if [[ "$is_enabled" == "enabled" && "$is_active" == "active" ]]; then
+  log_step "bluetooth.service already enabled and active; skipping"
+  exit 0
+fi
+
 sudo systemctl enable --now bluetooth.service

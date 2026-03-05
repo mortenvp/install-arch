@@ -19,5 +19,17 @@ if (( ${#packages[@]} == 0 )); then
   exit 1
 fi
 
-log_step "Installing ${#packages[@]} packages from $PACKAGE_LIST"
-sudo pacman -S --noconfirm --needed "${packages[@]}"
+missing_packages=()
+for pkg in "${packages[@]}"; do
+  if ! pacman -Q "$pkg" >/dev/null 2>&1; then
+    missing_packages+=("$pkg")
+  fi
+done
+
+if (( ${#missing_packages[@]} == 0 )); then
+  log_step "All ${#packages[@]} packages already installed; skipping"
+  exit 0
+fi
+
+log_step "Installing ${#missing_packages[@]} missing packages from $PACKAGE_LIST"
+sudo pacman -S --noconfirm --needed "${missing_packages[@]}"

@@ -36,8 +36,6 @@ ensure_yay() {
   fi
 }
 
-ensure_yay
-
 mapfile -t packages < <(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$')
 
 if (( ${#packages[@]} == 0 )); then
@@ -45,5 +43,19 @@ if (( ${#packages[@]} == 0 )); then
   exit 1
 fi
 
-log_step "Installing ${#packages[@]} AUR packages from $PACKAGE_LIST"
-yay -S --noconfirm --needed "${packages[@]}"
+missing_packages=()
+for pkg in "${packages[@]}"; do
+  if ! pacman -Q "$pkg" >/dev/null 2>&1; then
+    missing_packages+=("$pkg")
+  fi
+done
+
+if (( ${#missing_packages[@]} == 0 )); then
+  log_step "All ${#packages[@]} AUR packages already installed; skipping"
+  exit 0
+fi
+
+ensure_yay
+
+log_step "Installing ${#missing_packages[@]} missing AUR packages from $PACKAGE_LIST"
+yay -S --noconfirm --needed "${missing_packages[@]}"
