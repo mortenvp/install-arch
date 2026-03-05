@@ -47,12 +47,8 @@ if [[ "${SKIP_GNOME_EXTENSIONS:-}" == "1" ]]; then
   log_step "Skipping GNOME extension enable (SKIP_GNOME_EXTENSIONS=1)"
 else
   if command -v gnome-extensions >/dev/null 2>&1; then
-    if gnome-extensions list | grep -q '^pop-shell@system76.com$'; then
-      log_step "Enabling Pop Shell GNOME extension"
-      "$ROOT_DIR/scripts/enable-gnome-extensions.sh"
-    else
-      log_step "Pop Shell extension not found; skipping"
-    fi
+    log_step "Enabling GNOME extensions"
+    "$ROOT_DIR/scripts/enable-gnome-extensions.sh"
   else
     log_step "gnome-extensions not available; skipping"
   fi

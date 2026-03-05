@@ -99,7 +99,7 @@ This will:
 4. Apply configs from `config/` and `default/`.
 5. Set the default shell to fish.
 6. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-7. Enable the Pop Shell GNOME extension (if GNOME + extension are present).
+7. Enable GNOME extensions for Pop Shell and AppIndicator tray support (if available).
 
 Skip optional steps:
 
@@ -137,3 +137,18 @@ Apply configs only:
 
 - Scripts call `sudo` only where needed; run as your normal user.
 - Package installs use `--needed` to avoid re-installing.
+
+## GNOME tray icons (AppIndicator)
+
+On GNOME (especially Wayland), tray icons do not appear unless a StatusNotifier/AppIndicator host is enabled.
+
+This repo includes `gnome-shell-extension-appindicator` in `packages/base.packages` and enables it via `scripts/enable-gnome-extensions.sh` when present.
+
+If tray icons still do not appear after install:
+
+```bash
+gnome-extensions list --enabled | rg appindicator
+busctl --user list | rg -i StatusNotifier
+```
+
+Then log out and back in (Wayland session) and re-launch the app.

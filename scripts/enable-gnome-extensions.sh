@@ -12,11 +12,31 @@ fi
 
 POP_SHELL_UUID="pop-shell@system76.com"
 
-if gnome-extensions list | grep -q "^${POP_SHELL_UUID}$"; then
+mapfile -t installed_extensions < <(gnome-extensions list)
+
+enabled_any=0
+
+if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${POP_SHELL_UUID}$"; then
   log_step "Enabling Pop Shell (${POP_SHELL_UUID})"
   gnome-extensions enable "$POP_SHELL_UUID"
+  enabled_any=1
 else
-  echo "Pop Shell extension not found: ${POP_SHELL_UUID}" >&2
-  echo "Make sure gnome-shell-extension-pop-shell-git is installed." >&2
-  exit 1
+  log_step "Pop Shell extension not found; skipping"
+fi
+
+appindicator_uuid="$(printf '%s\n' "${installed_extensions[@]}" | grep '^appindicatorsupport@' | head -n 1 || true)"
+if [[ -n "$appindicator_uuid" ]]; then
+  log_step "Enabling AppIndicator (${appindicator_uuid})"
+  gnome-extensions enable "$appindicator_uuid"
+  enabled_any=1
+else
+  if [[ -d /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com ]]; then
+    log_step "AppIndicator is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+  else
+    log_step "AppIndicator extension not found; skipping"
+  fi
+fi
+
+if [[ "$enabled_any" -eq 0 ]]; then
+  log_step "No target GNOME extensions found to enable"
 fi
