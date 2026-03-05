@@ -12,10 +12,31 @@ if [[ ! -f "$PACKAGE_LIST" ]]; then
   exit 1
 fi
 
-if ! command -v yay >/dev/null 2>&1; then
-  echo "yay is not installed. Install it first (pacman: yay) or adjust this script." >&2
-  exit 1
-fi
+ensure_yay() {
+  if command -v yay >/dev/null 2>&1; then
+    return 0
+  fi
+
+  log_step "Installing yay-bin (AUR helper)"
+  sudo pacman -S --noconfirm --needed base-devel git
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  git clone https://aur.archlinux.org/yay-bin.git "$tmp_dir/yay-bin"
+  (
+    cd "$tmp_dir/yay-bin"
+    makepkg -si --noconfirm
+  )
+
+  if ! command -v yay >/dev/null 2>&1; then
+    echo "Failed to install yay from yay-bin." >&2
+    exit 1
+  fi
+}
+
+ensure_yay
 
 mapfile -t packages < <(grep -v '^#' "$PACKAGE_LIST" | grep -v '^$')
 

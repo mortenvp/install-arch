@@ -11,6 +11,19 @@ log_step "Installing packages (pacman + AUR)"
 log_step "Applying config files"
 "$ROOT_DIR/scripts/apply-config.sh"
 
+if [[ "${SKIP_GNOME_KEYBINDINGS:-}" == "1" ]]; then
+  log_step "Skipping GNOME keybindings (SKIP_GNOME_KEYBINDINGS=1)"
+else
+  "$ROOT_DIR/scripts/apply-gnome-keybindings.sh"
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  log_step "Enabling Bluetooth service"
+  "$ROOT_DIR/scripts/enable-bluetooth.sh"
+else
+  log_step "systemctl not available; skipping Bluetooth service enable"
+fi
+
 if [[ "${SKIP_SHELL:-}" == "1" ]]; then
   log_step "Skipping default shell change (SKIP_SHELL=1)"
 else

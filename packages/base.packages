@@ -3,6 +3,9 @@
 
 # Networking
 openssh
+bluez
+bluez-utils
+gnome-bluetooth-3.0
 
 # Quality of life
 ripgrep
@@ -17,10 +20,5 @@ bitwarden
 clang
 openai-codex
 opencode
-visual-studio-code-bin
-warp-terminal
-yay
-google-chrome
-tailscale
-vagrant
+flameshot
 virtualbox
