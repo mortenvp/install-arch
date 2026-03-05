@@ -29,6 +29,13 @@ else
   "$ROOT_DIR/scripts/apply-gnome-theme.sh"
 fi
 
+if [[ "${SKIP_AUDIO_TWEAKS:-}" == "1" ]]; then
+  log_step "Skipping audio defaults (SKIP_AUDIO_TWEAKS=1)"
+else
+  log_step "Applying audio defaults"
+  "$ROOT_DIR/scripts/configure-audio.sh"
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"

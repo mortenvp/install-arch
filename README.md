@@ -97,9 +97,11 @@ This will:
 2. Install AUR packages from `packages/aur.packages` (requires `yay`).
 3. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
 4. Apply configs from `config/` and `default/`.
-5. Set the default shell to fish.
-6. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-7. Enable GNOME extensions for Pop Shell and AppIndicator tray support (if available).
+5. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
+6. Set the default shell to fish.
+7. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+8. Enable GNOME extensions for Pop Shell and AppIndicator tray support (if available).
+9. Add GNOME autostart entry for `pear-desktop`.
 
 Skip optional steps:
 
@@ -108,6 +110,7 @@ SKIP_SHELL=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
+SKIP_AUDIO_TWEAKS=1 ./install.sh
 ```
 
 ## Add packages
