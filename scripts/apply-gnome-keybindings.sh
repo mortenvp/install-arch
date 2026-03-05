@@ -31,5 +31,5 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$C
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_TERMINAL_PATH" binding '<Control><Alt>t'
 
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" name 'Flameshot Capture'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" command 'flameshot gui'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" command 'xdotool exec flameshot gui'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" binding '<Control><Alt>p'

@@ -21,6 +21,7 @@ clang
 openai-codex
 opencode
 flameshot
+xdotool
 visual-studio-code-bin
 ttf-jetbrains-mono
 warp-terminal
