@@ -20,6 +20,13 @@ Run the top-level installer:
 ./install.sh
 ```
 
+By default, GNOME keybindings use the `laptop` profile (`<Control><Alt>...`).
+To switch to the `desktop` profile (`<Alt>...`), run:
+
+```bash
+GNOME_KEYBINDINGS_PROFILE=desktop ./install.sh
+```
+
 ## Test on a fresh Arch VM (Vagrant)
 
 Use the Vagrant environment in `testing/vagrant` to validate the install on a clean machine.
@@ -84,6 +91,12 @@ Like Omarchy, you can bootstrap with a single command (after publishing):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh | bash
+```
+
+Use the GNOME desktop keybinding profile during bootstrap:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh | GNOME_KEYBINDINGS_PROFILE=desktop bash
 ```
 
 or
