@@ -19,6 +19,8 @@ fish
 # Apps
 bitwarden
 clang
+cmake
+ninja
 openai-codex
 opencode
 flameshot
