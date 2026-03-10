@@ -36,6 +36,7 @@ BIND_WORKSPACE_LEFT="${KEY_MODIFIER}Left"
 BIND_WORKSPACE_RIGHT="${KEY_MODIFIER}Right"
 BIND_TERMINAL="${KEY_MODIFIER}t"
 BIND_SCREENSHOT="${KEY_MODIFIER}p"
+BIND_CLOSE_WINDOW='<Alt>F4'
 
 # Browser launcher shortcuts
 gsettings set org.gnome.settings-daemon.plugins.media-keys www "['$BIND_WWW_PRIMARY', '$BIND_WWW_SECONDARY']"
@@ -44,6 +45,7 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys email "[]"
 # Workspace navigation
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-left "['$BIND_WORKSPACE_LEFT']"
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-right "['$BIND_WORKSPACE_RIGHT']"
+gsettings set org.gnome.desktop.wm.keybindings close "['$BIND_CLOSE_WINDOW']"
 
 # Terminal and screenshot launchers
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_TERMINAL_PATH', '$CUSTOM_SCREENSHOT_PATH']"
