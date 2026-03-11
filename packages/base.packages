@@ -3,6 +3,7 @@
 
 # Networking
 openssh
+iperf3
 bluez
 bluez-utils
 gnome-bluetooth-3.0
