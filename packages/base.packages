@@ -21,6 +21,7 @@ fish
 bitwarden
 clang
 cmake
+glfw
 ninja
 npm
 openai-codex
