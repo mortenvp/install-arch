@@ -24,6 +24,7 @@ ninja
 npm
 openai-codex
 opencode
+obs-studio
 flameshot
 xdotool
 gnome-shell-extension-appindicator
