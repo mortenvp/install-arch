@@ -21,6 +21,7 @@ bitwarden
 clang
 cmake
 ninja
+npm
 openai-codex
 opencode
 flameshot
