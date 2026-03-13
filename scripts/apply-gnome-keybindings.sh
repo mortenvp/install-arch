@@ -32,6 +32,7 @@ CUSTOM_SCREENSHOT_PATH='/org/gnome/settings-daemon/plugins/media-keys/custom-key
 
 BIND_WWW_PRIMARY="${KEY_MODIFIER}w"
 BIND_WWW_SECONDARY="${KEY_MODIFIER}m"
+BIND_HOME="${KEY_MODIFIER}f"
 BIND_WORKSPACE_LEFT="${KEY_MODIFIER}Left"
 BIND_WORKSPACE_RIGHT="${KEY_MODIFIER}Right"
 BIND_TERMINAL="${KEY_MODIFIER}t"
@@ -41,6 +42,7 @@ BIND_CLOSE_WINDOW='<Alt>F4'
 # Browser launcher shortcuts
 gsettings set org.gnome.settings-daemon.plugins.media-keys www "['$BIND_WWW_PRIMARY', '$BIND_WWW_SECONDARY']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys email "[]"
+gsettings set org.gnome.settings-daemon.plugins.media-keys home "['$BIND_HOME']"
 
 # Workspace navigation
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-left "['$BIND_WORKSPACE_LEFT']"
