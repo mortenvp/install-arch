@@ -5,12 +5,17 @@
 openssh
 iperf
 iperf3
+tcpdump
+wireshark-cli
+wireshark-qt
 bluez
 bluez-utils
 gnome-bluetooth-3.0
 
 # Quality of life
 less
+vim
+jq
 ripgrep
 fd
 fzf
@@ -22,6 +27,7 @@ fish
 bitwarden
 clang
 cmake
+gdb
 glfw
 ninja
 npm
