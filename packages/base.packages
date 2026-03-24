@@ -11,6 +11,7 @@ wireshark-qt
 bluez
 bluez-utils
 gnome-bluetooth-3.0
+power-profiles-daemon
 
 # Quality of life
 less
