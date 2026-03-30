@@ -51,7 +51,7 @@ else
 fi
 
 if [[ "${SKIP_GNOME_EXTENSIONS:-}" == "1" ]]; then
-  log_step "Skipping GNOME extension enable (SKIP_GNOME_EXTENSIONS=1)"
+  log_step "Skipping GNOME extension setup (SKIP_GNOME_EXTENSIONS=1)"
 else
   if command -v gnome-extensions >/dev/null 2>&1; then
     log_step "Enabling GNOME extensions"
@@ -59,4 +59,7 @@ else
   else
     log_step "gnome-extensions not available; skipping"
   fi
+
+  log_step "Configuring Arch Update Indicator defaults"
+  "$ROOT_DIR/scripts/configure-gnome-arch-update.sh"
 fi

@@ -117,8 +117,9 @@ This will:
 5. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
 6. Set the default shell to fish.
 7. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-8. Enable GNOME extensions for Pop Shell and AppIndicator tray support (if available).
-9. Add GNOME autostart entry for `pear-desktop`.
+8. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+9. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+10. Add GNOME autostart entry for `pear-desktop`.
 
 Skip optional steps:
 
@@ -173,3 +174,13 @@ busctl --user list | rg -i StatusNotifier
 ```
 
 Then log out and back in (Wayland session) and re-launch the app.
+
+## Arch Update Indicator (yay)
+
+This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies defaults so the extension uses `yay` for checks and updates.
+
+If you need to re-apply these settings manually:
+
+```bash
+./scripts/configure-gnome-arch-update.sh
+```

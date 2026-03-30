@@ -11,6 +11,7 @@ if ! command -v gnome-extensions >/dev/null 2>&1; then
 fi
 
 POP_SHELL_UUID="pop-shell@system76.com"
+ARCH_UPDATE_UUID="arch-update@RaphaelRochet"
 
 mapfile -t installed_extensions < <(gnome-extensions list)
 
@@ -22,6 +23,18 @@ if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${POP_SHELL_UUID}$"; t
   enabled_any=1
 else
   log_step "Pop Shell extension not found; skipping"
+fi
+
+if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${ARCH_UPDATE_UUID}$"; then
+  log_step "Enabling Arch Update Indicator (${ARCH_UPDATE_UUID})"
+  gnome-extensions enable "$ARCH_UPDATE_UUID"
+  enabled_any=1
+else
+  if [[ -d "/usr/share/gnome-shell/extensions/${ARCH_UPDATE_UUID}" || -d "$HOME/.local/share/gnome-shell/extensions/${ARCH_UPDATE_UUID}" ]]; then
+    log_step "Arch Update Indicator is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+  else
+    log_step "Arch Update Indicator extension not found; skipping"
+  fi
 fi
 
 appindicator_uuid="$(printf '%s\n' "${installed_extensions[@]}" | grep '^appindicatorsupport@' | head -n 1 || true)"
