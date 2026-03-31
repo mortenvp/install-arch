@@ -31,7 +31,12 @@ if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${ARCH_UPDATE_UUID}$";
   enabled_any=1
 else
   if [[ -d "/usr/share/gnome-shell/extensions/${ARCH_UPDATE_UUID}" || -d "$HOME/.local/share/gnome-shell/extensions/${ARCH_UPDATE_UUID}" ]]; then
-    log_step "Arch Update Indicator is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+    log_step "Arch Update Indicator files found; attempting to enable (${ARCH_UPDATE_UUID})"
+    if gnome-extensions enable "$ARCH_UPDATE_UUID"; then
+      enabled_any=1
+    else
+      log_step "Arch Update Indicator is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+    fi
   else
     log_step "Arch Update Indicator extension not found; skipping"
   fi
@@ -44,7 +49,12 @@ if [[ -n "$appindicator_uuid" ]]; then
   enabled_any=1
 else
   if [[ -d /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com ]]; then
-    log_step "AppIndicator is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+    log_step "AppIndicator files found; attempting to enable (${appindicator_uuid:-appindicatorsupport@rgcjonas.gmail.com})"
+    if gnome-extensions enable "${appindicator_uuid:-appindicatorsupport@rgcjonas.gmail.com}"; then
+      enabled_any=1
+    else
+      log_step "AppIndicator is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+    fi
   else
     log_step "AppIndicator extension not found; skipping"
   fi
