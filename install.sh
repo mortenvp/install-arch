@@ -39,8 +39,15 @@ fi
 if command -v systemctl >/dev/null 2>&1; then
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"
+
+  if [[ "${SKIP_GDM_MONITORS:-}" == "1" ]]; then
+    log_step "Skipping GDM monitor sync setup (SKIP_GDM_MONITORS=1)"
+  else
+    log_step "Setting up GDM monitor sync"
+    bash "$ROOT_DIR/scripts/setup-gdm-monitor-sync.sh"
+  fi
 else
-  log_step "systemctl not available; skipping Bluetooth service enable"
+  log_step "systemctl not available; skipping Bluetooth and GDM service setup"
 fi
 
 if [[ "${SKIP_SHELL:-}" == "1" ]]; then

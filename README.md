@@ -120,6 +120,7 @@ This will:
 8. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
 9. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
 10. Add GNOME autostart entry for `pear-desktop`.
+11. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and install a `gdm.service` drop-in to refresh it before login.
 
 Skip optional steps:
 
@@ -129,6 +130,7 @@ SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
+SKIP_GDM_MONITORS=1 ./install.sh
 ```
 
 ## Add packages
