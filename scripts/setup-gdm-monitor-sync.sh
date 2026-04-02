@@ -28,7 +28,7 @@ log_step "Installing GDM monitor sync drop-in"
 sudo install -d -m 755 "$DROP_IN_DIR"
 sudo tee "$DROP_IN_FILE" >/dev/null <<EOF
 [Service]
-ExecStartPre=/bin/sh -c 'if [ -r "$SOURCE_MONITORS_XML" ]; then /bin/install -d -m 755 /etc/xdg && /bin/install -m 644 "$SOURCE_MONITORS_XML" /etc/xdg/monitors.xml; fi'
+ExecStartPre=/bin/sh -c 'if [ -r "$SOURCE_MONITORS_XML" ]; then /bin/install -d -m 755 /etc/xdg /var/lib/gdm/.config && /bin/install -m 644 "$SOURCE_MONITORS_XML" /etc/xdg/monitors.xml && /bin/install -m 644 "$SOURCE_MONITORS_XML" /var/lib/gdm/.config/monitors.xml && /bin/chown gdm:gdm /var/lib/gdm/.config/monitors.xml; fi'
 EOF
 
 sudo systemctl daemon-reload
