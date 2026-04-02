@@ -4,7 +4,8 @@ end
 
 set -gx SSH_AUTH_SOCK "$HOME/.bitwarden-ssh-agent.sock"
 alias lg="lazygit"
-alias ll="ls -la"
+alias ls="lsd --group-dirs=first --icon=always"
+alias ll="lsd -la --group-dirs=first --icon=always"
 alias c="code . -n"
 
 zoxide init fish | source

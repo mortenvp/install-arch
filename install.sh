@@ -5,6 +5,12 @@ ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=./scripts/logging.sh
 source "$ROOT_DIR/scripts/logging.sh"
 
+if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+  echo "Please run install.sh as your regular user (not root/sudo)." >&2
+  echo "Running as root will copy user config files (including fish) into /root." >&2
+  exit 1
+fi
+
 log_step "Installing packages (pacman + AUR)"
 "$ROOT_DIR/scripts/install-all.sh"
 

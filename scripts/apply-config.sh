@@ -11,6 +11,8 @@ VSCODE_SETTINGS_SRC="$ROOT_DIR/config/Code/User/settings.json"
 VSCODE_SETTINGS_TARGET="$HOME/.config/Code/User/settings.json"
 VSCODE_SETTINGS_BACKUP=""
 GIT_CONFIG_TARGET="$HOME/.config/git/config"
+FISH_CONFIG_SRC="$ROOT_DIR/config/fish/config.fish"
+FISH_CONFIG_TARGET="$HOME/.config/fish/config.fish"
 EXISTING_GIT_NAME=""
 EXISTING_GIT_EMAIL=""
 
@@ -53,3 +55,8 @@ fi
 log_step "Ensuring fish config directory exists"
 # Ensure fish config directory exists
 mkdir -p "$HOME/.config/fish"
+
+if [[ -f "$FISH_CONFIG_SRC" ]]; then
+  install -m 644 "$FISH_CONFIG_SRC" "$FISH_CONFIG_TARGET"
+  log_step "Applied fish config to $FISH_CONFIG_TARGET"
+fi

@@ -15,6 +15,7 @@ power-profiles-daemon
 
 # Quality of life
 less
+lsd
 vim
 jq
 ripgrep
@@ -39,6 +40,7 @@ flameshot
 xdotool
 gnome-shell-extension-appindicator
 ttf-jetbrains-mono
+ttf-jetbrains-mono-nerd
 github-cli
 tailscale
 virtualbox
