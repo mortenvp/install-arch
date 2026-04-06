@@ -160,7 +160,7 @@ Apply configs only:
 
 - Scripts call `sudo` only where needed; run as your normal user.
 - Package installs use `--needed` to avoid re-installing.
-- Audio tweak persistence is provided via `config/wireplumber/wireplumber.conf.d/51-bluez-disable-autoswitch.conf` and applied to `~/.config/wireplumber/wireplumber.conf.d/`.
+- Audio tweak persistence is provided via `config/wireplumber/wireplumber.conf.d/` (disable profile autoswitch and prefer Bluetooth output as default when connected) and applied to `~/.config/wireplumber/wireplumber.conf.d/`.
 
 ## GNOME tray icons (AppIndicator)
 
