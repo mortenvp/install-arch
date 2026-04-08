@@ -112,15 +112,16 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 This will:
 1. Install pacman packages from `packages/base.packages`.
 2. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
-3. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
-4. Apply configs from `config/` and `default/`.
-5. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
-6. Set the default shell to fish.
-7. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-8. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-9. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-10. Add GNOME autostart entry for `pear-desktop`.
-11. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
+3. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
+4. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
+5. Apply configs from `config/` and `default/`.
+6. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
+7. Set the default shell to fish.
+8. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+9. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+10. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+11. Add GNOME autostart entry for `pear-desktop`.
+12. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
@@ -131,6 +132,26 @@ SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
 SKIP_GDM_MONITORS=1 ./install.sh
+SKIP_HW_CODECS=1 ./install.sh
+```
+
+## Media codecs (auto-detect + install)
+
+`install.sh` now runs `scripts/install-hw-codecs.sh`, which:
+- installs CPU decode baseline packages (`ffmpeg`, `openh264`)
+- detects GPU vendor(s) (Intel/AMD/NVIDIA)
+- installs matching hardware decode packages when available in pacman
+
+Run it manually:
+
+```bash
+./scripts/install-hw-codecs.sh
+```
+
+Check only (no installation):
+
+```bash
+./scripts/install-hw-codecs.sh --check
 ```
 
 ## Add packages

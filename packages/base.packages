@@ -36,6 +36,9 @@ npm
 openai-codex
 opencode
 obs-studio
+vlc
+ffmpeg
+openh264
 flameshot
 xdotool
 gnome-shell-extension-appindicator

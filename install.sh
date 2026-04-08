@@ -14,6 +14,13 @@ fi
 log_step "Installing packages (pacman + AUR)"
 "$ROOT_DIR/scripts/install-all.sh"
 
+if [[ "${SKIP_HW_CODECS:-}" == "1" ]]; then
+  log_step "Skipping hardware codec setup (SKIP_HW_CODECS=1)"
+else
+  log_step "Installing hardware codec support"
+  "$ROOT_DIR/scripts/install-hw-codecs.sh"
+fi
+
 log_step "Applying config files"
 "$ROOT_DIR/scripts/apply-config.sh"
 
