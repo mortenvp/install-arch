@@ -44,18 +44,28 @@ if (( ${#packages[@]} == 0 )); then
 fi
 
 missing_packages=()
+installed_devel_packages=()
 for pkg in "${packages[@]}"; do
   if ! pacman -Q "$pkg" >/dev/null 2>&1; then
     missing_packages+=("$pkg")
+  elif [[ "$pkg" =~ -(git|hg|svn|bzr|darcs|cvs)$ ]]; then
+    installed_devel_packages+=("$pkg")
   fi
 done
 
-if (( ${#missing_packages[@]} == 0 )); then
+if (( ${#missing_packages[@]} == 0 && ${#installed_devel_packages[@]} == 0 )); then
   log_step "All ${#packages[@]} AUR packages already installed; skipping"
   exit 0
 fi
 
 ensure_yay
 
-log_step "Installing ${#missing_packages[@]} missing AUR packages from $PACKAGE_LIST"
-yay -S --noconfirm --needed "${missing_packages[@]}"
+if (( ${#missing_packages[@]} > 0 )); then
+  log_step "Installing ${#missing_packages[@]} missing AUR packages from $PACKAGE_LIST"
+  yay -S --noconfirm --needed "${missing_packages[@]}"
+fi
+
+if (( ${#installed_devel_packages[@]} > 0 )); then
+  log_step "Refreshing ${#installed_devel_packages[@]} devel package(s) from $PACKAGE_LIST"
+  yay -S --noconfirm --devel "${installed_devel_packages[@]}"
+fi

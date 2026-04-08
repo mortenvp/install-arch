@@ -111,7 +111,7 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 
 This will:
 1. Install pacman packages from `packages/base.packages`.
-2. Install AUR packages from `packages/aur.packages` (requires `yay`).
+2. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 3. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
 4. Apply configs from `config/` and `default/`.
 5. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
