@@ -4,5 +4,7 @@
   "terminal.integrated.fontFamily": "JetBrains Mono",
   "editor.formatOnSave": true,
   "editor.rulers": [80],
-  "editor.minimap.enabled": false
+  "editor.minimap.enabled": false,
+  "C_Cpp.doxygen.generateOnType": false,
+  "C_Cpp.doxygen.generateOnCodeAction": false
 }
