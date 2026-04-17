@@ -1,0 +1,5 @@
+# VS Code extensions installed with `code --install-extension`
+# One extension ID per line: publisher.extension
+
+ms-vscode.cpptools
+dnut.rewrap-revived

@@ -24,6 +24,16 @@ fi
 log_step "Applying config files"
 "$ROOT_DIR/scripts/apply-config.sh"
 
+if [[ "${SKIP_VSCODE_EXTENSIONS:-}" == "1" ]]; then
+  log_step "Skipping VS Code extension setup (SKIP_VSCODE_EXTENSIONS=1)"
+else
+  log_step "Installing VS Code extensions"
+  "$ROOT_DIR/scripts/install-vscode-extensions.sh"
+
+  log_step "Configuring VS Code keybindings"
+  "$ROOT_DIR/scripts/configure-vscode-keybindings.sh"
+fi
+
 if [[ "${SKIP_GNOME_KEYBINDINGS:-}" == "1" ]]; then
   log_step "Skipping GNOME keybindings (SKIP_GNOME_KEYBINDINGS=1)"
 else

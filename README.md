@@ -6,6 +6,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 
 - `packages/base.packages`: pacman packages you always want.
 - `packages/aur.packages`: AUR packages installed with `yay`.
+- `packages/vscode.extensions`: VS Code extensions installed with `code`.
 - `config/`: files copied into `~/.config/`.
 - `default/`: reserved for dotfiles copied to `$HOME` (currently unused).
 - `scripts/`: install/config helpers.
@@ -115,18 +116,21 @@ This will:
 3. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 4. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
 5. Apply configs from `config/` and `default/`.
-6. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
-7. Set the default shell to fish.
-8. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-9. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-10. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-11. Add GNOME autostart entry for `pear-desktop`.
-12. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
+6. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
+7. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
+8. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
+9. Set the default shell to fish.
+10. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+11. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+12. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+13. Add GNOME autostart entry for `pear-desktop`.
+14. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
 ```bash
 SKIP_SHELL=1 ./install.sh
+SKIP_VSCODE_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
@@ -158,6 +162,7 @@ Check only (no installation):
 
 - Pacman: add to `packages/base.packages`.
 - AUR: add to `packages/aur.packages`.
+- VS Code extensions: add extension IDs to `packages/vscode.extensions`.
 - Upstream tools: edit `scripts/install-upstream-tools.sh` and per-tool scripts in `scripts/`.
 
 Then run:
@@ -166,11 +171,24 @@ Then run:
 ./scripts/install-all.sh
 ```
 
+Install VS Code extensions only:
+
+```bash
+./scripts/install-vscode-extensions.sh
+```
+
+Configure VS Code keybindings only:
+
+```bash
+./scripts/configure-vscode-keybindings.sh
+```
+
 ## Config files
 
 - Fish config: `config/fish/config.fish` (copied to `~/.config/fish/config.fish`).
 - Git config: `config/git/config` (copied to `~/.config/git/config`).
 - VS Code settings: `config/Code/User/settings.json` merged into `~/.config/Code/User/settings.json` (adds missing keys; prompts on conflicts when interactive; non-interactive runs overwrite conflicting keys with repo defaults).
+- VS Code keybindings: `scripts/configure-vscode-keybindings.sh` ensures `Alt+Q` is bound to Rewrap Revived (`rewrap.rewrapComment`) in `~/.config/Code/User/keybindings.json`.
 - OpenCode config: `config/opencode/opencode.json` (copied to `~/.config/opencode/opencode.json`) and includes the Warp plugin (`@warp-dot-dev/opencode-warp`).
 
 Apply configs only:
