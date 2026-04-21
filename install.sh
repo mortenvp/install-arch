@@ -59,6 +59,13 @@ else
   "$ROOT_DIR/scripts/configure-audio.sh"
 fi
 
+if [[ "${SKIP_PTRACE_SCOPE:-}" == "1" ]]; then
+  log_step "Skipping ptrace scope setup (SKIP_PTRACE_SCOPE=1)"
+else
+  log_step "Configuring ptrace scope for debugger attach"
+  "$ROOT_DIR/scripts/configure-ptrace.sh"
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"
