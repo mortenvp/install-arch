@@ -28,9 +28,9 @@ To switch to the `desktop` profile (`<Alt>...`), run:
 GNOME_KEYBINDINGS_PROFILE=desktop ./install.sh
 ```
 
-This also controls the Home folder shortcut:
-- `laptop`: `<Control><Alt>f`
-- `desktop`: `<Alt>f`
+This also controls the Home folder shortcut and overview key:
+- `laptop`: home `<Control><Alt>f`, overview `Super`
+- `desktop`: home `<Alt>f`, overview `Super_L` (left Super only)
 
 ## Test on a fresh Arch VM (Vagrant)
 

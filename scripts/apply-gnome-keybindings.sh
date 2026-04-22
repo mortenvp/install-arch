@@ -9,9 +9,11 @@ KEYBINDINGS_PROFILE="${GNOME_KEYBINDINGS_PROFILE:-laptop}"
 case "$KEYBINDINGS_PROFILE" in
   laptop)
     KEY_MODIFIER='<Control><Alt>'
+    OVERLAY_KEY='Super'
     ;;
   desktop)
     KEY_MODIFIER='<Alt>'
+    OVERLAY_KEY='Super_L'
     ;;
   *)
     printf "Error: Unsupported GNOME_KEYBINDINGS_PROFILE '%s'. Supported values: laptop, desktop.\n" "$KEYBINDINGS_PROFILE" >&2
@@ -25,7 +27,7 @@ if ! command -v gsettings >/dev/null 2>&1; then
 fi
 
 log_step "Applying GNOME keybindings"
-log_step "GNOME keybindings profile: $KEYBINDINGS_PROFILE (modifier: $KEY_MODIFIER)"
+log_step "GNOME keybindings profile: $KEYBINDINGS_PROFILE (modifier: $KEY_MODIFIER, overlay: $OVERLAY_KEY)"
 
 CUSTOM_TERMINAL_PATH='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/'
 CUSTOM_SCREENSHOT_PATH='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/'
@@ -48,6 +50,9 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys home "['$BIND_HOME']"
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-left "['$BIND_WORKSPACE_LEFT']"
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-right "['$BIND_WORKSPACE_RIGHT']"
 gsettings set org.gnome.desktop.wm.keybindings close "['$BIND_CLOSE_WINDOW']"
+
+# Overview overlay key
+gsettings set org.gnome.mutter overlay-key "$OVERLAY_KEY"
 
 # Terminal and screenshot launchers
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_TERMINAL_PATH', '$CUSTOM_SCREENSHOT_PATH']"
