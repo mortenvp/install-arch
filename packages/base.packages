@@ -24,6 +24,7 @@ fzf
 btop
 zoxide
 fish
+tmux
 
 # Apps
 bitwarden
