@@ -228,8 +228,16 @@ This repo includes `gnome-shell-extension-appindicator` in `packages/base.packag
 If tray icons still do not appear after install:
 
 ```bash
+gsettings get org.gnome.shell disable-user-extensions
 gnome-extensions list --enabled | rg appindicator
 busctl --user list | rg -i StatusNotifier
+```
+
+If `disable-user-extensions` is `true`, run:
+
+```bash
+gsettings set org.gnome.shell disable-user-extensions false
+./scripts/enable-gnome-extensions.sh
 ```
 
 Then log out and back in (Wayland session) and re-launch the app.

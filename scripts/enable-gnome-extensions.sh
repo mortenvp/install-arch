@@ -10,6 +10,18 @@ if ! command -v gnome-extensions >/dev/null 2>&1; then
   exit 1
 fi
 
+if command -v gsettings >/dev/null 2>&1; then
+  disable_user_extensions="$(gsettings get org.gnome.shell disable-user-extensions 2>/dev/null || true)"
+  if [[ "$disable_user_extensions" == "true" ]]; then
+    log_step "GNOME user extensions are globally disabled; enabling them"
+    if gsettings set org.gnome.shell disable-user-extensions false; then
+      log_step "Enabled GNOME user extensions globally"
+    else
+      log_step "Could not update org.gnome.shell disable-user-extensions; continuing with per-extension enables"
+    fi
+  fi
+fi
+
 POP_SHELL_UUID="pop-shell@system76.com"
 ARCH_UPDATE_UUID="arch-update@RaphaelRochet"
 
