@@ -2,6 +2,7 @@
 # One extension ID per line: publisher.extension
 
 ms-vscode.cpptools
+matepek.vscode-catch2-test-adapter
 dnut.rewrap-revived
 mrmlnc.vscode-duplicate
 littlefoxteam.vscode-python-test-adapter
