@@ -10,7 +10,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `config/`: files copied into `~/.config/`.
 - `default/`: reserved for dotfiles copied to `$HOME` (currently unused).
 - `scripts/`: install/config helpers.
-  - Includes upstream installer wrappers for `lix`/`nix`, `devbox`, `uv`, and `tailscale`.
+  - Includes installer wrappers for Warp (official Arch pacman repo), `lix`/`nix`, `devbox`, `uv`, and `tailscale`.
 - `install.sh`: main entry point.
 
 ## Install
@@ -112,21 +112,22 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 
 This will:
 1. Install pacman packages from `packages/base.packages`.
-2. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
-3. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
-4. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
-5. Apply configs from `config/` and `default/`.
-6. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
-7. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
-8. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
-9. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
-10. Configure global GDB pretty printers in `~/.gdbinit`.
-11. Set the default shell to fish.
-12. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-13. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-14. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-15. Add GNOME autostart entry for `pear-desktop`.
-16. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
+2. Configure Warp's official pacman repo/signing key and install `warp-terminal`.
+3. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
+4. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
+5. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
+6. Apply configs from `config/` and `default/`.
+7. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
+8. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
+9. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
+10. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
+11. Configure global GDB pretty printers in `~/.gdbinit`.
+12. Set the default shell to fish.
+13. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+14. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+15. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+16. Add GNOME autostart entry for `pear-desktop`.
+17. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
@@ -141,6 +142,20 @@ SKIP_PTRACE_SCOPE=1 ./install.sh
 SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 SKIP_GDM_MONITORS=1 ./install.sh
 SKIP_HW_CODECS=1 ./install.sh
+```
+
+## Warp terminal on Arch (official repo)
+
+`install.sh` runs `scripts/install-warp-terminal.sh`, which:
+- adds Warp's pacman repository (`[warpdotdev]`) to `/etc/pacman.conf` when missing
+- imports and locally signs `linux-maintainers@warp.dev`
+- removes conflicting AUR-provided `warp-terminal` packages (if present)
+- installs `warp-terminal` with pacman
+
+Run it manually:
+
+```bash
+./scripts/install-warp-terminal.sh
 ```
 
 ## Media codecs (auto-detect + install)
@@ -200,6 +215,7 @@ SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 
 - Pacman: add to `packages/base.packages`.
 - AUR: add to `packages/aur.packages`.
+- Warp terminal (Arch): managed by `scripts/install-warp-terminal.sh` (official repo package, not AUR).
 - VS Code extensions: add extension IDs to `packages/vscode.extensions`.
 - Upstream tools: edit `scripts/install-upstream-tools.sh` and per-tool scripts in `scripts/`.
 
