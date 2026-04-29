@@ -5,6 +5,7 @@
 openssh
 iperf
 iperf3
+netperf
 tcpdump
 wireshark-cli
 wireshark-qt
