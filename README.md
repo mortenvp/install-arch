@@ -120,12 +120,13 @@ This will:
 7. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
 8. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
 9. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
-10. Set the default shell to fish.
-11. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-12. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-13. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-14. Add GNOME autostart entry for `pear-desktop`.
-15. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
+10. Configure global GDB pretty printers in `~/.gdbinit`.
+11. Set the default shell to fish.
+12. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+13. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+14. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+15. Add GNOME autostart entry for `pear-desktop`.
+16. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
@@ -137,6 +138,7 @@ SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
 SKIP_PTRACE_SCOPE=1 ./install.sh
+SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 SKIP_GDM_MONITORS=1 ./install.sh
 SKIP_HW_CODECS=1 ./install.sh
 ```
@@ -172,6 +174,26 @@ Opt out for a run:
 
 ```bash
 SKIP_PTRACE_SCOPE=1 ./install.sh
+```
+
+## GDB pretty printers (global)
+
+`install.sh` runs `scripts/configure-gdb-pretty-printers.sh` by default, which:
+- writes a managed pretty-printer block into `~/.gdbinit`
+- enables Python auto-loading in GDB
+- adds default `skip` rules so stepping avoids common system/libstdc++ code paths
+- adds `/usr/share/gcc-*/python` to the Python path and registers libstdc++ pretty printers
+
+Run it manually:
+
+```bash
+./scripts/configure-gdb-pretty-printers.sh
+```
+
+Opt out for a run:
+
+```bash
+SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 ```
 
 ## Add packages

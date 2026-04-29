@@ -12,6 +12,7 @@ bluez
 bluez-utils
 gnome-bluetooth-3.0
 power-profiles-daemon
+kernel-modules-hook
 
 # Quality of life
 less

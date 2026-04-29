@@ -66,6 +66,13 @@ else
   "$ROOT_DIR/scripts/configure-ptrace.sh"
 fi
 
+if [[ "${SKIP_GDB_PRETTY_PRINTERS:-}" == "1" ]]; then
+  log_step "Skipping GDB pretty-printer setup (SKIP_GDB_PRETTY_PRINTERS=1)"
+else
+  log_step "Configuring GDB pretty printers"
+  "$ROOT_DIR/scripts/configure-gdb-pretty-printers.sh"
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"
