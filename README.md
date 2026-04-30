@@ -121,13 +121,15 @@ This will:
 8. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
 9. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
 10. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
-11. Configure global GDB pretty printers in `~/.gdbinit`.
-12. Set the default shell to fish.
-13. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-14. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-15. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-16. Add GNOME autostart entry for `pear-desktop`.
-17. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
+11. Allow the install user to run `sudo tcpdump` without a password via `/etc/sudoers.d/10-tcpdump-$USER`.
+12. Configure global GDB pretty printers in `~/.gdbinit`.
+13. Enable and start `sshd.service` with `systemctl`.
+14. Set the default shell to fish.
+15. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+16. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+17. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+18. Add GNOME autostart entry for `pear-desktop`.
+19. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
@@ -139,6 +141,7 @@ SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
 SKIP_PTRACE_SCOPE=1 ./install.sh
+SKIP_TCPDUMP_SUDO=1 ./install.sh
 SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 SKIP_GDM_MONITORS=1 ./install.sh
 SKIP_HW_CODECS=1 ./install.sh
@@ -189,6 +192,16 @@ Opt out for a run:
 
 ```bash
 SKIP_PTRACE_SCOPE=1 ./install.sh
+```
+
+## Tcpdump without sudo password
+
+`install.sh` runs `scripts/configure-tcpdump-sudo.sh` by default, which writes and validates a sudoers drop-in allowing the install user to run `/usr/bin/tcpdump` with `sudo` without a password.
+
+Opt out for a run:
+
+```bash
+SKIP_TCPDUMP_SUDO=1 ./install.sh
 ```
 
 ## GDB pretty printers (global)

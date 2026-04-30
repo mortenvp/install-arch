@@ -66,6 +66,13 @@ else
   "$ROOT_DIR/scripts/configure-ptrace.sh"
 fi
 
+if [[ "${SKIP_TCPDUMP_SUDO:-}" == "1" ]]; then
+  log_step "Skipping tcpdump sudo setup (SKIP_TCPDUMP_SUDO=1)"
+else
+  log_step "Configuring passwordless sudo for tcpdump"
+  "$ROOT_DIR/scripts/configure-tcpdump-sudo.sh"
+fi
+
 if [[ "${SKIP_GDB_PRETTY_PRINTERS:-}" == "1" ]]; then
   log_step "Skipping GDB pretty-printer setup (SKIP_GDB_PRETTY_PRINTERS=1)"
 else
@@ -74,6 +81,9 @@ else
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
+  log_step "Enabling SSH daemon"
+  "$ROOT_DIR/scripts/enable-sshd.sh"
+
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"
 
@@ -84,7 +94,7 @@ if command -v systemctl >/dev/null 2>&1; then
     bash "$ROOT_DIR/scripts/setup-gdm-monitor-sync.sh"
   fi
 else
-  log_step "systemctl not available; skipping Bluetooth and GDM service setup"
+  log_step "systemctl not available; skipping SSH, Bluetooth, and GDM service setup"
 fi
 
 if [[ "${SKIP_SHELL:-}" == "1" ]]; then
