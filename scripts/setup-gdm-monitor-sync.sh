@@ -23,17 +23,24 @@ fi
 SOURCE_MONITORS_XML="$HOME/.config/monitors.xml"
 DROP_IN_DIR="/etc/systemd/system/gdm.service.d"
 DROP_IN_FILE="$DROP_IN_DIR/override.conf"
+HELPER_DIR="/usr/local/lib/install-arch"
+HELPER_BIN="/usr/local/bin/install-arch-sync-gdm-monitors"
+
+log_step "Installing GDM monitor sync helper"
+sudo install -d -m 755 "$HELPER_DIR" /usr/local/bin
+sudo install -m 755 "$SCRIPT_DIR/sync-gdm-monitors.sh" "$HELPER_BIN"
+sudo install -m 755 "$SCRIPT_DIR/render-gdm-monitors.py" "$HELPER_DIR/render-gdm-monitors.py"
 
 log_step "Installing GDM monitor sync drop-in"
 sudo install -d -m 755 "$DROP_IN_DIR"
 sudo tee "$DROP_IN_FILE" >/dev/null <<EOF
 [Service]
-ExecStartPre=/bin/sh -c 'if [ -r "$SOURCE_MONITORS_XML" ]; then /bin/install -d -m 755 /etc/xdg /var/lib/gdm/.config && /bin/install -m 644 "$SOURCE_MONITORS_XML" /etc/xdg/monitors.xml && /bin/install -m 644 "$SOURCE_MONITORS_XML" /var/lib/gdm/.config/monitors.xml; if /usr/bin/getent passwd gdm >/dev/null 2>&1; then /bin/chown gdm:gdm /var/lib/gdm/.config/monitors.xml; fi; fi'
+ExecStartPre=$HELPER_BIN --update-source "$SOURCE_MONITORS_XML"
 EOF
 
 sudo systemctl daemon-reload
 log_step "Installed $DROP_IN_FILE"
 
 if [[ -f "$SOURCE_MONITORS_XML" ]]; then
-  bash "$SCRIPT_DIR/sync-gdm-monitors.sh" "$SOURCE_MONITORS_XML"
+  bash "$SCRIPT_DIR/sync-gdm-monitors.sh" --update-source "$SOURCE_MONITORS_XML"
 fi

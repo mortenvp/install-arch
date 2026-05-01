@@ -5,6 +5,7 @@
 openssh
 iperf
 iperf3
+ethtool
 netperf
 tcpdump
 wireshark-cli
@@ -36,6 +37,7 @@ gdb
 glfw
 ninja
 npm
+python
 openai-codex
 opencode
 obs-studio

@@ -115,21 +115,22 @@ This will:
 2. Configure Warp's official pacman repo/signing key and install `warp-terminal`.
 3. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 4. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
-5. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
-6. Apply configs from `config/` and `default/`.
-7. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
-8. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
-9. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
-10. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
-11. Allow the install user to run `sudo tcpdump` without a password via `/etc/sudoers.d/10-tcpdump-$USER`.
-12. Configure global GDB pretty printers in `~/.gdbinit`.
-13. Enable and start `sshd.service` with `systemctl`.
-14. Set the default shell to fish.
-15. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-16. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-17. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-18. Add GNOME autostart entry for `pear-desktop`.
-19. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, and install a `gdm.service` drop-in to refresh both before login.
+5. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
+6. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`) via scripts in `scripts/`.
+7. Apply configs from `config/` and `default/`.
+8. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
+9. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
+10. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
+11. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
+12. Allow the install user to run `sudo tcpdump` without a password via `/etc/sudoers.d/10-tcpdump-$USER`.
+13. Configure global GDB pretty printers in `~/.gdbinit`.
+14. Enable and start `sshd.service` with `systemctl`.
+15. Set the default shell to fish.
+16. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+17. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+18. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+19. Add GNOME autostart entry for `pear-desktop`.
+20. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
@@ -140,6 +141,7 @@ SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
+SKIP_NVIDIA_DISPLAY=1 ./install.sh
 SKIP_PTRACE_SCOPE=1 ./install.sh
 SKIP_TCPDUMP_SUDO=1 ./install.sh
 SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
@@ -178,6 +180,34 @@ Check only (no installation):
 
 ```bash
 ./scripts/install-hw-codecs.sh --check
+```
+
+## NVIDIA display reliability
+
+`install.sh` runs `scripts/configure-nvidia-display.sh`, which detects NVIDIA GPUs and configures early NVIDIA DRM loading through `/etc/mkinitcpio.conf.d/90-nvidia-early-kms.conf`. It skips the initramfs rebuild when the packages and drop-in are already in place.
+
+Run it manually after changing NVIDIA or kernel packages:
+
+```bash
+./scripts/configure-nvidia-display.sh
+```
+
+Check only (no installation or initramfs rebuild):
+
+```bash
+./scripts/configure-nvidia-display.sh --check
+```
+
+## GDM monitor layout
+
+`install.sh` runs `scripts/setup-gdm-monitor-sync.sh`, which installs a GDM pre-start helper. The helper uses each machine's own `~/.config/monitors.xml` as the source of truth, reads the currently connected DRM monitor EDIDs, and rewrites only the connector names before syncing the layout to GDM.
+
+This avoids hard-coding any monitor model, serial, connector, or desk layout in the repository. Different machines keep their own GNOME display layout, including intentionally disabled displays.
+
+Run it manually after changing display layout in GNOME Settings:
+
+```bash
+./scripts/sync-gdm-monitors.sh --update-source
 ```
 
 ## Debugger attach without sudo (ptrace_scope)

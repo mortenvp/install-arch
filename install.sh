@@ -21,6 +21,13 @@ else
   "$ROOT_DIR/scripts/install-hw-codecs.sh"
 fi
 
+if [[ "${SKIP_NVIDIA_DISPLAY:-}" == "1" ]]; then
+  log_step "Skipping NVIDIA display setup (SKIP_NVIDIA_DISPLAY=1)"
+else
+  log_step "Configuring NVIDIA display reliability"
+  "$ROOT_DIR/scripts/configure-nvidia-display.sh"
+fi
+
 log_step "Applying config files"
 "$ROOT_DIR/scripts/apply-config.sh"
 
