@@ -31,12 +31,23 @@ fi
 keybindings_tmp=$(mktemp)
 
 jq '
-  map(select((.key // "") != "alt+q" and (.linux // "") != "alt+q"))
+  map(
+    select(
+      (.key // "") != "alt+q"
+      and (.linux // "") != "alt+q"
+      and (.key // "") != "ctrl+shift+s"
+      and (.linux // "") != "ctrl+shift+s"
+    )
+  )
   + [
       {
         key: "alt+q",
         command: "rewrap.rewrapComment",
         when: "editorTextFocus"
+      },
+      {
+        key: "ctrl+shift+s",
+        command: "workbench.action.files.saveAll"
       }
     ]
 ' "$VSCODE_KEYBINDINGS_TARGET" >"$keybindings_tmp"
@@ -44,4 +55,4 @@ jq '
 install -m 644 "$keybindings_tmp" "$VSCODE_KEYBINDINGS_TARGET"
 rm -f "$keybindings_tmp"
 
-log_step "Bound Alt+Q to Rewrap Revived in $VSCODE_KEYBINDINGS_TARGET"
+log_step "Bound Alt+Q to Rewrap Revived and Ctrl+Shift+S to Save All in $VSCODE_KEYBINDINGS_TARGET"
