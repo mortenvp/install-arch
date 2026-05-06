@@ -332,3 +332,7 @@ If you need to re-apply these settings manually:
 ```bash
 ./scripts/configure-gnome-arch-update.sh
 ```
+
+Note: this script prefers `gnome-terminal` when available, and for both `gnome-terminal`
+and `kgx` it runs `yay` then `exec`s into an interactive shell. This avoids landing in a
+read-only `Command exited` window after updates.

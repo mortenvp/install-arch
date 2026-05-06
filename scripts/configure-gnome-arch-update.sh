@@ -17,10 +17,14 @@ fi
 
 check_cmd="/bin/sh -c \"(/usr/bin/checkupdates; /usr/bin/yay -Qu --color never | sed 's/Get .*//') | sort -u -t' ' -k1,1\""
 
-if command -v kgx >/dev/null 2>&1; then
-  update_cmd="kgx -e '/bin/sh -c \"yay ; echo Done - Press enter to exit; read _\"'"
-elif command -v gnome-terminal >/dev/null 2>&1; then
-  update_cmd="gnome-terminal -- /bin/sh -c \"yay ; echo Done - Press enter to exit; read _\""
+if command -v gnome-terminal >/dev/null 2>&1; then
+  # Keep an interactive shell open after updates so the terminal never lands in
+  # a read-only "Command exited" view because of profile/terminal behavior.
+  update_cmd="gnome-terminal -- /bin/bash -lc \"yay; exec /bin/bash -i\""
+elif command -v kgx >/dev/null 2>&1; then
+  # kgx command mode can land in a read-only "Command exited" state. Keeping an
+  # interactive shell open after yay avoids that state.
+  update_cmd="kgx -e '/bin/bash -lc \"yay; exec /bin/bash -i\"'"
 else
   update_cmd="yay"
 fi
