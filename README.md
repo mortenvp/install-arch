@@ -323,9 +323,11 @@ gsettings set org.gnome.shell disable-user-extensions false
 
 Then log out and back in (Wayland session) and re-launch the app.
 
-## Arch Update Indicator (yay)
+## Arch Update Indicator (yay + npm)
 
-This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies defaults so the extension uses `yay` for checks and updates.
+This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies defaults so the extension:
+- checks both `yay` updates and global npm updates (when `npm` is installed)
+- runs `yay` and `npm update -g` from the update command
 
 If you need to re-apply these settings manually:
 
@@ -334,5 +336,5 @@ If you need to re-apply these settings manually:
 ```
 
 Note: this script prefers `gnome-terminal` when available, and for both `gnome-terminal`
-and `kgx` it runs `yay` then `exec`s into an interactive shell. This avoids landing in a
+and `kgx` it runs `yay`, then `sudo npm update -g` when available, then `exec`s into an interactive shell. This avoids landing in a
 read-only `Command exited` window after updates.
