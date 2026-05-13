@@ -125,12 +125,13 @@ This will:
 12. Allow the install user to run `sudo tcpdump` without a password via `/etc/sudoers.d/10-tcpdump-$USER`.
 13. Configure global GDB pretty printers in `~/.gdbinit`.
 14. Enable and start `sshd.service` with `systemctl`.
-15. Set the default shell to fish.
-16. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-17. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
-18. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-19. Add GNOME autostart entry for `pear-desktop`.
-20. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
+15. Enable and start `tailscaled.service` with `systemctl` when available.
+16. Set the default shell to fish.
+17. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+18. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+19. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+20. Add GNOME autostart entry for `pear-desktop`.
+21. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 

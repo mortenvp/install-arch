@@ -94,6 +94,9 @@ if command -v systemctl >/dev/null 2>&1; then
   log_step "Enabling Bluetooth service"
   "$ROOT_DIR/scripts/enable-bluetooth.sh"
 
+  log_step "Enabling Tailscale daemon"
+  "$ROOT_DIR/scripts/enable-tailscaled.sh"
+
   if [[ "${SKIP_GDM_MONITORS:-}" == "1" ]]; then
     log_step "Skipping GDM monitor sync setup (SKIP_GDM_MONITORS=1)"
   else
@@ -101,7 +104,7 @@ if command -v systemctl >/dev/null 2>&1; then
     bash "$ROOT_DIR/scripts/setup-gdm-monitor-sync.sh"
   fi
 else
-  log_step "systemctl not available; skipping SSH, Bluetooth, and GDM service setup"
+  log_step "systemctl not available; skipping SSH, Bluetooth, Tailscale, and GDM service setup"
 fi
 
 if [[ "${SKIP_SHELL:-}" == "1" ]]; then
