@@ -46,6 +46,7 @@ vlc
 libreoffice-fresh
 ffmpeg
 openh264
+gst-plugins-ugly
 flameshot
 xdotool
 gnome-shell-extension-appindicator
