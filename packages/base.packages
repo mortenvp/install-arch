@@ -38,6 +38,7 @@ gdb
 glfw
 ninja
 npm
+typescript
 python
 openai-codex
 opencode

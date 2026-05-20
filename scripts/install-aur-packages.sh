@@ -43,6 +43,15 @@ if (( ${#packages[@]} == 0 )); then
   exit 1
 fi
 
+# gnome-shell-extension-pop-shell-git's build checks for `tsc` on PATH but does not
+# reliably pull TypeScript as an Arch package dependency.
+if printf '%s\n' "${packages[@]}" | grep -qx 'gnome-shell-extension-pop-shell-git'; then
+  if ! command -v tsc >/dev/null 2>&1; then
+    log_step "tsc not found; installing TypeScript for pop-shell build"
+    sudo pacman -S --noconfirm typescript
+  fi
+fi
+
 missing_packages=()
 installed_devel_packages=()
 for pkg in "${packages[@]}"; do

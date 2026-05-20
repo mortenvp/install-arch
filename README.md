@@ -116,7 +116,7 @@ This will:
 3. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 4. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 5. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
-6. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`, `@earendil-works/pi-coding-agent`) via scripts in `scripts/`.
+6. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
 7. Apply configs from `config/` and `default/`.
 8. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
 9. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
