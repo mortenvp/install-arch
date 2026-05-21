@@ -31,6 +31,13 @@ fi
 log_step "Applying config files"
 "$ROOT_DIR/scripts/apply-config.sh"
 
+if [[ "${SKIP_TLDR_SETUP:-}" == "1" ]]; then
+  log_step "Skipping tldr setup (SKIP_TLDR_SETUP=1)"
+else
+  log_step "Configuring tldr (tealdeer)"
+  "$ROOT_DIR/scripts/configure-tealdeer.sh"
+fi
+
 if [[ "${SKIP_VSCODE_EXTENSIONS:-}" == "1" ]]; then
   log_step "Skipping VS Code extension setup (SKIP_VSCODE_EXTENSIONS=1)"
 else
