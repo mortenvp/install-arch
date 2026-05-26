@@ -19,7 +19,9 @@ kernel-modules-hook
 
 # Quality of life
 less
+bat
 lsd
+tree
 vim
 jq
 ripgrep
