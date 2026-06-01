@@ -67,6 +67,8 @@ if (( ${#missing_packages[@]} == 0 && ${#installed_devel_packages[@]} == 0 )); t
   exit 0
 fi
 
+"$SCRIPT_DIR/cleanup-npm-global-conflicts.sh"
+
 ensure_yay
 
 if (( ${#missing_packages[@]} > 0 )); then
