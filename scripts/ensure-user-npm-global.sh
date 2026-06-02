@@ -8,6 +8,9 @@ source "$SCRIPT_DIR/logging.sh"
 if ! command -v npm >/dev/null 2>&1; then
   log_step "npm not found; installing npm"
   sudo pacman -S --noconfirm --needed npm
+elif ! npm --version >/dev/null 2>&1; then
+  log_step "npm is installed but broken; reinstalling npm"
+  sudo pacman -S --noconfirm npm
 fi
 
 USER_NPM_PREFIX="$HOME/.local"

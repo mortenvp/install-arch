@@ -128,7 +128,7 @@ This will:
 15. Enable and start `tailscaled.service` with `systemctl` when available.
 16. Set the default shell to fish.
 17. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
-18. Enable GNOME extensions for Pop Shell, AppIndicator tray support, and Arch Update Indicator (if available).
+18. Enable GNOME extensions for Pop Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
 19. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
 20. Add GNOME autostart entry for `pear-desktop`.
 21. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
@@ -328,7 +328,7 @@ Then log out and back in (Wayland session) and re-launch the app.
 
 This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies defaults so the extension:
 - checks both `yay` updates and global npm updates (when `npm` is installed)
-- runs `yay` and `npm update -g` from the update command
+- runs `yay` and user-local `npm update -g` from the update command (`NPM_CONFIG_PREFIX=$HOME/.local`, no `sudo`)
 
 If you need to re-apply these settings manually:
 
@@ -337,5 +337,5 @@ If you need to re-apply these settings manually:
 ```
 
 Note: this script prefers `gnome-terminal` when available, and for both `gnome-terminal`
-and `kgx` it runs `yay`, then `sudo npm update -g` when available, then `exec`s into an interactive shell. This avoids landing in a
+and `kgx` it runs `yay`, then user-local `npm update -g` when available, then `exec`s into an interactive shell. This avoids landing in a
 read-only `Command exited` window after updates.

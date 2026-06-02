@@ -24,6 +24,7 @@ fi
 
 POP_SHELL_UUID="pop-shell@system76.com"
 ARCH_UPDATE_UUID="arch-update@RaphaelRochet"
+GSCONNECT_UUID="gsconnect@andyholmes.github.io"
 
 mapfile -t installed_extensions < <(gnome-extensions list)
 
@@ -51,6 +52,23 @@ else
     fi
   else
     log_step "Arch Update Indicator extension not found; skipping"
+  fi
+fi
+
+if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${GSCONNECT_UUID}$"; then
+  log_step "Enabling GSConnect (${GSCONNECT_UUID})"
+  gnome-extensions enable "$GSCONNECT_UUID"
+  enabled_any=1
+else
+  if [[ -d "/usr/share/gnome-shell/extensions/${GSCONNECT_UUID}" || -d "$HOME/.local/share/gnome-shell/extensions/${GSCONNECT_UUID}" ]]; then
+    log_step "GSConnect files found; attempting to enable (${GSCONNECT_UUID})"
+    if gnome-extensions enable "$GSCONNECT_UUID"; then
+      enabled_any=1
+    else
+      log_step "GSConnect is installed but not visible to the current GNOME Shell session; log out/in and run this script again"
+    fi
+  else
+    log_step "GSConnect extension not found; skipping"
   fi
 fi
 
