@@ -80,6 +80,13 @@ else
   "$ROOT_DIR/scripts/configure-ptrace.sh"
 fi
 
+if [[ "${SKIP_PERF_EVENTS:-}" == "1" ]]; then
+  log_step "Skipping perf event setup (SKIP_PERF_EVENTS=1)"
+else
+  log_step "Configuring perf event access"
+  "$ROOT_DIR/scripts/configure-perf-events.sh"
+fi
+
 if [[ "${SKIP_TCPDUMP_SUDO:-}" == "1" ]]; then
   log_step "Skipping tcpdump sudo setup (SKIP_TCPDUMP_SUDO=1)"
 else

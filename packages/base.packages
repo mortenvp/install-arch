@@ -38,6 +38,7 @@ bitwarden
 clang
 cmake
 gdb
+perf
 glfw
 ninja
 npm

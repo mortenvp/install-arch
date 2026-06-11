@@ -225,6 +225,18 @@ Opt out for a run:
 SKIP_PTRACE_SCOPE=1 ./install.sh
 ```
 
+## Perf event access
+
+`install.sh` runs `scripts/configure-perf-events.sh` by default, which:
+- sets `kernel.perf_event_paranoid=1` immediately
+- writes `kernel.perf_event_paranoid = 1` to `/etc/sysctl.d/10-perf-events.conf` for reboot persistence
+
+Opt out for a run:
+
+```bash
+SKIP_PERF_EVENTS=1 ./install.sh
+```
+
 ## Tcpdump without sudo password
 
 `install.sh` runs `scripts/configure-tcpdump-sudo.sh` by default, which writes and validates a sudoers drop-in allowing the install user to run `/usr/bin/tcpdump` with `sudo` without a password.
