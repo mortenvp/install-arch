@@ -13,3 +13,4 @@ fi
 log_step "Applying GNOME theme defaults"
 
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+gsettings set org.gnome.desktop.interface clock-format '24h'

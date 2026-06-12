@@ -127,7 +127,7 @@ This will:
 14. Enable and start `sshd.service` with `systemctl`.
 15. Enable and start `tailscaled.service` with `systemctl` when available.
 16. Set the default shell to fish.
-17. Apply GNOME keybindings, default to 8 workspaces, and set dark mode (if GNOME settings are available).
+17. Apply GNOME keybindings, default to 8 workspaces, set dark mode, and use a 24-hour clock (if GNOME settings are available).
 18. Enable GNOME extensions for Pop Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
 19. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
 20. Add GNOME autostart entry for `pear-desktop`.

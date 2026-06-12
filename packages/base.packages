@@ -38,6 +38,7 @@ bitwarden
 clang
 cmake
 gdb
+shellcheck
 perf
 glfw
 ninja
