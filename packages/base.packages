@@ -6,6 +6,7 @@ openssh
 iperf
 iperf3
 ethtool
+iw
 netperf
 nmap
 tcpdump
