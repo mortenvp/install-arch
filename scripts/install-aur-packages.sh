@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-# shellcheck source=./logging.sh
+# shellcheck source=scripts/logging.sh
 source "$SCRIPT_DIR/logging.sh"
 
 PACKAGE_LIST="${1:-$(dirname "$0")/../packages/aur.packages}"

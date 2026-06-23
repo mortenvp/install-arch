@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # Online install entry point (curl | bash)
-INSTALL_ARCH_ONLINE_INSTALL=true
-
-ansi_art='   ___           __        __        ___             __
+read -r -d '' ansi_art <<'EOF' || true
+   ___           __        __        ___             __
   / _ \___ ______/ /____ __/ /__ ____/ _ | _________ / /_
  / ___/ _ `/ __/ _  / -_) _  / -_) __/ __ |/ __/ __/  \/
-/_/   \_,_/_/  \_,_/\__/\_,_/\__/_/ /_/ |_/_/  \__/_/\_\'
+/_/   \_,_/_/  \_,_/\__/\_,_/\__/_/ /_/ |_/_/  \__/_/\_\
+EOF
 
 export TERM="${TERM:-xterm}"
 clear

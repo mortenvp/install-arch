@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-# shellcheck source=./logging.sh
+# shellcheck source=scripts/logging.sh
 if [[ -r "$SCRIPT_DIR/logging.sh" ]]; then
   source "$SCRIPT_DIR/logging.sh"
 else

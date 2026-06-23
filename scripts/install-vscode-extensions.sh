@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-# shellcheck source=./logging.sh
+# shellcheck source=scripts/logging.sh
 source "$SCRIPT_DIR/logging.sh"
 
 EXTENSION_LIST="${1:-$SCRIPT_DIR/../packages/vscode.extensions}"

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-# shellcheck source=./logging.sh
+# shellcheck source=scripts/logging.sh
 source "$SCRIPT_DIR/logging.sh"
 
 TARGET_USER="${SUDO_USER:-${USER:-$(id -un)}}"

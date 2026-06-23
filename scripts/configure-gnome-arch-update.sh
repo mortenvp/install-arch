@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-# shellcheck source=./logging.sh
+# shellcheck source=scripts/logging.sh
 source "$SCRIPT_DIR/logging.sh"
 
 if ! command -v gsettings >/dev/null 2>&1; then
@@ -15,7 +15,7 @@ if ! gsettings list-schemas | grep -qx 'org.gnome.shell.extensions.arch-update';
   exit 0
 fi
 
-npm_prefix='$HOME/.local'
+npm_prefix="\$HOME/.local"
 npm_env="NPM_CONFIG_PREFIX=$npm_prefix PATH=$npm_prefix/bin:\$PATH"
 cleanup_script="$SCRIPT_DIR/cleanup-npm-global-conflicts.sh"
 
