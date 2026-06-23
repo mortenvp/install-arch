@@ -17,10 +17,11 @@ fi
 
 npm_prefix='$HOME/.local'
 npm_env="NPM_CONFIG_PREFIX=$npm_prefix PATH=$npm_prefix/bin:\$PATH"
+cleanup_script="$SCRIPT_DIR/cleanup-npm-global-conflicts.sh"
 
 check_cmd="/bin/sh -c \"(/usr/bin/checkupdates; /usr/bin/yay -Qu --color never | sed 's/Get .*//'; if command -v npm >/dev/null 2>&1; then $npm_env npm outdated -g --depth=0 --json 2>/dev/null | node -e 'let data=\\\"\\\"; process.stdin.on(\\\"data\\\", c => data += c).on(\\\"end\\\", () => { if (!data.trim()) return; const updates = JSON.parse(data); for (const [name, meta] of Object.entries(updates)) { console.log(\\\"npm-\\\" + name + \\\" \\\" + meta.current + \\\" -> \\\" + meta.latest); } });' 2>/dev/null || true; fi) | sort -u -t' ' -k1,1\""
 
-update_body="yay; if command -v npm >/dev/null 2>&1; then mkdir -p $npm_prefix; $npm_env npm update -g; fi"
+update_body="$cleanup_script && yay && if command -v npm >/dev/null 2>&1; then mkdir -p $npm_prefix; $npm_env npm update -g; fi"
 
 if command -v gnome-terminal >/dev/null 2>&1; then
   # Keep an interactive shell open after updates so the terminal never lands in

@@ -7,16 +7,24 @@ source "$SCRIPT_DIR/logging.sh"
 
 # Top-level paths that often conflict when previously installed via `npm -g` with sudo.
 EXACT_PATHS=(
+  /usr/bin/eslint
   /usr/bin/pn
   /usr/bin/pnx
+  /usr/bin/semver
 )
 
 # Whole global npm package trees that are safe to remove only when the top-level
 # tree is not owned by pacman.
 NODE_MODULE_TREES=(
+  /usr/lib/node_modules/eslint
   /usr/lib/node_modules/pnpm
+  /usr/lib/node_modules/semver
   /usr/lib/node_modules/typescript
 )
+
+# Avoid recursively scanning pacman-owned npm package trees here. Those trees can
+# contain many thousands of files, and checking each path with pacman makes the
+# installer appear to hang. Keep cleanup targeted to known conflict paths below.
 
 # Known unowned files created by `sudo npm update -g npm` that conflict with the
 # Arch npm package upgrade. Keep this targeted: recursively pruning pacman-owned
@@ -62,6 +70,15 @@ NPM_CONFLICT_PATHS=(
   /usr/lib/node_modules/npm/node_modules/lru-cache/dist/esm/perf.js
 )
 
+# Known unowned files created by legacy `sudo npm install/update -g` for packages
+# that are now managed by pacman. Keep this targeted rather than deleting whole
+# pacman-owned package trees under /usr/lib/node_modules.
+PACKAGE_CONFLICT_PATHS=(
+  /usr/lib/node_modules/eslint/lib/shared/message-counts.js
+  /usr/lib/node_modules/eslint/messages/rule-unsupported-language.js
+  /usr/lib/node_modules/eslint/node_modules/@eslint/plugin-kit/dist/cjs/types.d.cts
+)
+
 removed=0
 npm_touched=0
 
@@ -102,6 +119,10 @@ for path in "${NPM_CONFLICT_PATHS[@]}"; do
     remove_unowned_path "$path"
     npm_touched=1
   fi
+done
+
+for path in "${PACKAGE_CONFLICT_PATHS[@]}"; do
+  remove_unowned_path "$path"
 done
 
 if (( npm_touched == 1 )) && pacman -Q npm >/dev/null 2>&1; then

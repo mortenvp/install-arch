@@ -340,7 +340,8 @@ Then log out and back in (Wayland session) and re-launch the app.
 
 This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies defaults so the extension:
 - checks both `yay` updates and global npm updates (when `npm` is installed)
-- runs `yay` and user-local `npm update -g` from the update command (`NPM_CONFIG_PREFIX=$HOME/.local`, no `sudo`)
+- cleans up legacy npm-global files under `/usr` before updating
+- runs `yay`, then user-local `npm update -g` only if `yay` succeeds (`NPM_CONFIG_PREFIX=$HOME/.local`, no `sudo`)
 
 If you need to re-apply these settings manually:
 
@@ -349,5 +350,5 @@ If you need to re-apply these settings manually:
 ```
 
 Note: this script prefers `gnome-terminal` when available, and for both `gnome-terminal`
-and `kgx` it runs `yay`, then user-local `npm update -g` when available, then `exec`s into an interactive shell. This avoids landing in a
+and `kgx` it runs npm-global cleanup, then `yay`, then user-local `npm update -g` when available only if `yay` succeeds, then `exec`s into an interactive shell. This avoids landing in a
 read-only `Command exited` window after updates.

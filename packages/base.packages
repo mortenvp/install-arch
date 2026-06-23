@@ -57,6 +57,7 @@ gst-libav
 gst-plugins-ugly
 flameshot
 xdotool
+zenity
 gnome-shell-extension-appindicator
 ttf-jetbrains-mono
 ttf-jetbrains-mono-nerd
