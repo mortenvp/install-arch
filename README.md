@@ -342,11 +342,18 @@ This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies 
 - checks both `yay` updates and global npm updates (when `npm` is installed)
 - cleans up legacy npm-global files under `/usr` before updating
 - runs `yay`, then user-local `npm update -g` only if `yay` succeeds (`NPM_CONFIG_PREFIX=$HOME/.local`, no `sudo`)
+- avoids persisting npm `prefix`/`globalconfig` in `~/.npmrc`, because those settings break nvm-based AUR builds
 
 If you need to re-apply these settings manually:
 
 ```bash
 ./scripts/configure-gnome-arch-update.sh
+```
+
+If an nvm-based AUR package fails with `Your user's .npmrc file has a globalconfig and/or a prefix setting`, clean up the legacy user npm config:
+
+```bash
+./scripts/cleanup-npm-global-conflicts.sh
 ```
 
 Note: this script prefers `gnome-terminal` when available, and for both `gnome-terminal`

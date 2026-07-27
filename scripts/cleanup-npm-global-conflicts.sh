@@ -82,6 +82,14 @@ PACKAGE_CONFLICT_PATHS=(
 removed=0
 npm_touched=0
 
+# nvm refuses to run when ~/.npmrc contains prefix/globalconfig. Older versions
+# of this repo persisted prefix=$HOME/.local there for user-local npm globals;
+# remove those settings and use NPM_CONFIG_PREFIX per npm command instead.
+if [[ -f "$HOME/.npmrc" ]] && grep -Eq '^[[:space:]]*(prefix|globalconfig)[[:space:]]*=' "$HOME/.npmrc"; then
+  log_step "Removing nvm-incompatible prefix/globalconfig from ~/.npmrc"
+  sed -i.bak -E '/^[[:space:]]*(prefix|globalconfig)[[:space:]]*=/d' "$HOME/.npmrc"
+fi
+
 mark_removal_started() {
   if (( removed == 0 )); then
     log_step "Removing unowned npm-global paths under /usr that conflict with pacman"

@@ -10,6 +10,10 @@ OLD_PACKAGE="@mariozechner/pi-coding-agent"
 
 "$SCRIPT_DIR/ensure-user-npm-global.sh"
 
+USER_NPM_PREFIX="${USER_NPM_PREFIX:-$HOME/.local}"
+export NPM_CONFIG_PREFIX="$USER_NPM_PREFIX"
+export PATH="$USER_NPM_PREFIX/bin:$PATH"
+
 if npm list -g --depth=0 "$OLD_PACKAGE" >/dev/null 2>&1; then
   log_step "Removing legacy package $OLD_PACKAGE"
   npm uninstall -g "$OLD_PACKAGE"
