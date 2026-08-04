@@ -12,7 +12,6 @@ if ! command -v curl >/dev/null 2>&1; then
   sudo pacman -S --noconfirm --needed curl
 fi
 
-"$SCRIPT_DIR/install-lix.sh"
 "$SCRIPT_DIR/install-devbox.sh"
 "$SCRIPT_DIR/install-uv.sh"
 "$SCRIPT_DIR/install-tailscale.sh"

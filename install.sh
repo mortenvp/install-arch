@@ -11,6 +11,13 @@ if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   exit 1
 fi
 
+if [[ "${SKIP_LIX_REMOVAL:-}" == "1" ]]; then
+  log_step "Skipping Lix removal (SKIP_LIX_REMOVAL=1)"
+else
+  log_step "Removing Lix if present"
+  "$ROOT_DIR/scripts/remove-lix.sh"
+fi
+
 log_step "Installing packages (pacman + AUR)"
 "$ROOT_DIR/scripts/install-all.sh"
 
@@ -99,6 +106,13 @@ if [[ "${SKIP_GDB_PRETTY_PRINTERS:-}" == "1" ]]; then
 else
   log_step "Configuring GDB pretty printers"
   "$ROOT_DIR/scripts/configure-gdb-pretty-printers.sh"
+fi
+
+if [[ "${SKIP_NIX:-}" == "1" ]]; then
+  log_step "Skipping Nix setup (SKIP_NIX=1)"
+else
+  log_step "Configuring Nix"
+  "$ROOT_DIR/scripts/configure-nix.sh"
 fi
 
 if command -v systemctl >/dev/null 2>&1; then

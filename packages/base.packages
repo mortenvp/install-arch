@@ -43,6 +43,7 @@ shellcheck
 perf
 glfw
 ninja
+nix
 npm
 typescript
 python

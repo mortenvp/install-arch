@@ -10,7 +10,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `config/`: files copied into `~/.config/`.
 - `default/`: reserved for dotfiles copied to `$HOME` (currently unused).
 - `scripts/`: install/config helpers.
-  - Includes installer wrappers for Warp (official Arch pacman repo), `lix`/`nix`, `devbox`, `uv`, and `tailscale`.
+  - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, and `tailscale`.
 - `install.sh`: main entry point.
 
 ## Install
@@ -111,31 +111,35 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 ```
 
 This will:
-1. Install pacman packages from `packages/base.packages`.
-2. Configure Warp's official pacman repo/signing key and install `warp-terminal`.
-3. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
-4. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
-5. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
-6. Install upstream tools (`lix`/`nix`, `devbox`, `uv`, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
-7. Apply configs from `config/` and `default/`.
-8. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
-9. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
-10. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
-11. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
-12. Allow the install user to run `sudo tcpdump` without a password via `/etc/sudoers.d/10-tcpdump-$USER`.
-13. Configure global GDB pretty printers in `~/.gdbinit`.
-14. Enable and start `sshd.service` with `systemctl`.
-15. Enable and start `tailscaled.service` with `systemctl` when available.
-16. Set the default shell to fish.
-17. Apply GNOME keybindings, default to 8 workspaces, set dark mode, and use a 24-hour clock (if GNOME settings are available).
-18. Enable GNOME extensions for Pop Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
-19. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-20. Add GNOME autostart entry for `pear-desktop`.
-21. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
+1. Remove an existing Lix install if detected.
+2. Install pacman packages from `packages/base.packages`, including Arch's `nix` package.
+3. Configure Warp's official pacman repo/signing key and install `warp-terminal`.
+4. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
+5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
+6. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
+7. Install upstream tools (`devbox`, `uv`, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
+8. Apply configs from `config/` and `default/`.
+9. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
+10. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
+11. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
+12. Set `kernel.yama.ptrace_scope=0` for debugger attach without repeated superuser prompts (system-wide).
+13. Allow the install user to run `sudo tcpdump` without a password via `/etc/sudoers.d/10-tcpdump-$USER`.
+14. Configure global GDB pretty printers in `~/.gdbinit`.
+15. Enable and start `nix-daemon.service` with `systemctl` when available.
+16. Enable and start `sshd.service` with `systemctl`.
+17. Enable and start `tailscaled.service` with `systemctl` when available.
+18. Set the default shell to fish.
+19. Apply GNOME keybindings, default to 8 workspaces, set dark mode, and use a 24-hour clock (if GNOME settings are available).
+20. Enable GNOME extensions for Pop Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
+21. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
+22. Add GNOME autostart entry for `pear-desktop`.
+23. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
 
 ```bash
+SKIP_LIX_REMOVAL=1 ./install.sh
+SKIP_NIX=1 ./install.sh
 SKIP_SHELL=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
