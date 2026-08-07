@@ -7,6 +7,8 @@ iperf
 iperf3
 ethtool
 iw
+iwd
+dhcpcd
 netperf
 nmap
 tcpdump
