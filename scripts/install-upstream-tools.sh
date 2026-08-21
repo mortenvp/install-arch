@@ -16,4 +16,5 @@ fi
 "$SCRIPT_DIR/install-uv.sh"
 "$SCRIPT_DIR/install-tailscale.sh"
 "$SCRIPT_DIR/install-pi-dev.sh"
+"$SCRIPT_DIR/install-pi-agent-stuff.sh"
 "$SCRIPT_DIR/install-playwright.sh"

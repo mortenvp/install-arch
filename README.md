@@ -278,6 +278,7 @@ SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 - Warp terminal (Arch): managed by `scripts/install-warp-terminal.sh` (official repo package, not AUR).
 - VS Code extensions: add extension IDs to `packages/vscode.extensions`.
 - Upstream tools: edit `scripts/install-upstream-tools.sh` and per-tool scripts in `scripts/`.
+- Personal Pi package: `scripts/install-pi-agent-stuff.sh` installs `mortenvp/agent-stuff` from its `main` branch. Arch Update Indicator reports new commits and refreshes the package during updates.
 
 Then run:
 
@@ -343,9 +344,9 @@ Then log out and back in (Wayland session) and re-launch the app.
 ## Arch Update Indicator (yay + npm)
 
 This repo installs `gnome-shell-extension-arch-update-git` from AUR and applies defaults so the extension:
-- checks both `yay` updates and global npm updates (when `npm` is installed)
+- checks `yay` updates, global npm updates (when `npm` is installed), and new commits on the personal `mortenvp/agent-stuff` Pi package
 - cleans up legacy npm-global files under `/usr` before updating
-- runs `yay`, then user-local `npm update -g` only if `yay` succeeds (`NPM_CONFIG_PREFIX=$HOME/.local`, no `sudo`)
+- runs `yay`, then user-local `npm update -g` only if `yay` succeeds (`NPM_CONFIG_PREFIX=$HOME/.local`, no `sudo`), then refreshes the personal `mortenvp/agent-stuff` Pi package
 - avoids persisting npm `prefix`/`globalconfig` in `~/.npmrc`, because those settings break nvm-based AUR builds
 
 If you need to re-apply these settings manually:
