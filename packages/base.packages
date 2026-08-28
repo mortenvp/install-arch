@@ -20,6 +20,11 @@ gnome-bluetooth-3.0
 power-profiles-daemon
 kernel-modules-hook
 
+# Storage and disk utilities
+util-linux
+dosfstools
+gnome-disk-utility
+
 # Quality of life
 less
 bat
