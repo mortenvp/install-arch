@@ -48,6 +48,7 @@ cmake
 gdb
 shellcheck
 perf
+stress
 glfw
 ninja
 nix
