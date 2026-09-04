@@ -8,7 +8,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `packages/aur.packages`: AUR packages installed with `yay`.
 - `packages/vscode.extensions`: VS Code extensions installed with `code`.
 - `config/`: files copied into `~/.config/`.
-- `default/`: reserved for dotfiles copied to `$HOME` (currently unused).
+- `bin/`: user commands installed into `~/.local/bin/`.
 - `scripts/`: install/config helpers.
   - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, and `tailscale`.
 - `install.sh`: main entry point.
@@ -118,7 +118,7 @@ This will:
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 6. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
 7. Install upstream tools (`devbox`, `uv`, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
-8. Apply configs from `config/` and `default/`.
+8. Install user commands from `bin/` and apply configs from `config/`.
 9. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
 10. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
 11. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
@@ -300,17 +300,46 @@ Configure VS Code keybindings only:
 
 ## Config files
 
-- Fish config: `config/fish/config.fish` (copied to `~/.config/fish/config.fish`).
+- Fish config: `config/fish/config.fish` (copied to `~/.config/fish/config.fish`) and adds `~/.local/bin` to `PATH`.
+- Fish functions: `config/fish/functions/` (copied to `~/.config/fish/functions/`), including the thin `wt` and `ci-merge` shell wrappers.
+- User commands: `bin/` (installed executable into `~/.local/bin/`), including the Python-powered `wt-ui` worktree selector and `ci-merge-ui` pull-request merger.
 - Git config: `config/git/config` (copied to `~/.config/git/config`).
 - VS Code settings: `config/Code/User/settings.json` merged into `~/.config/Code/User/settings.json` (adds missing keys; prompts on conflicts when interactive; non-interactive runs overwrite conflicting keys with repo defaults).
 - VS Code keybindings: `scripts/configure-vscode-keybindings.sh` ensures `Alt+Q` is bound to Rewrap Revived (`rewrap.rewrapComment`) and `Ctrl+Shift+S` is bound to Save All (`workbench.action.files.saveAll`) in `~/.config/Code/User/keybindings.json`.
 - OpenCode config: `config/opencode/opencode.json` (copied to `~/.config/opencode/opencode.json`) and includes the Warp plugin (`@warp-dot-dev/opencode-warp`).
 
-Apply configs only:
+Apply configs and user commands only:
 
 ```bash
 ./scripts/apply-config.sh
 ```
+
+## Git worktree selector
+
+From any Git worktree, run:
+
+```fish
+wt
+```
+
+`wt` first offers two interactive, arrow-key-driven flows:
+
+- **Use an existing remote branch:** fetch and prune all Git remotes, show remote branches newest-first by commit date, and create a tracking worktree (or enter its existing worktree).
+- **Create a new branch:** update the current branch with `git pull --ff-only`, create the branch in a new worktree, and publish it with `git push --set-upstream` to the current branch's remote.
+
+The `wt-ui` executable uses Questionary for selection and Rich for terminal output. Its PEP 723 metadata lets it run through `uv` with isolated Python dependencies. UI is written to stderr; only the selected path is written to stdout for the Fish wrapper to consume and `cd` into.
+
+## CI-gated pull-request merge
+
+Run from the clean, fully pushed branch associated with a GitHub pull request:
+
+```fish
+ci-merge
+ci-merge 42
+ci-merge https://github.com/owner/repository/pull/42
+```
+
+`ci-merge` requires authenticated `gh`, an open non-draft pull request, a local branch and HEAD matching the pushed PR head, at least one CI check, and squash merging support. It shows the PR and checks, asks for confirmation with **No** as the safe default, waits for pending checks, and revalidates the local state and exact PR head SHA before running a guarded squash merge. Failed checks, local changes, unpushed commits, review blockers, or PR changes stop the merge.
 
 ## Notes
 

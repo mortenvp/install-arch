@@ -3,6 +3,7 @@ if status is-interactive
 end
 
 set -gx SSH_AUTH_SOCK "$HOME/.bitwarden-ssh-agent.sock"
+fish_add_path --global "$HOME/.local/bin"
 alias lg="lazygit"
 alias ls="lsd --group-dirs=first --icon=always"
 alias ll="lsd -la --group-dirs=first --icon=always"

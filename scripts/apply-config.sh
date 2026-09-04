@@ -13,6 +13,8 @@ VSCODE_SETTINGS_BACKUP=""
 GIT_CONFIG_TARGET="$HOME/.config/git/config"
 FISH_CONFIG_SRC="$ROOT_DIR/config/fish/config.fish"
 FISH_CONFIG_TARGET="$HOME/.config/fish/config.fish"
+LOCAL_BIN_SRC="$ROOT_DIR/bin"
+LOCAL_BIN_TARGET="$HOME/.local/bin"
 EXISTING_GIT_NAME=""
 EXISTING_GIT_EMAIL=""
 
@@ -150,6 +152,16 @@ fi
 if [[ -d "$ROOT_DIR/config" ]]; then
   mkdir -p "$HOME/.config"
   cp -R "$ROOT_DIR/config/"* "$HOME/.config/" 2>/dev/null || true
+fi
+
+# Install user commands as executables.
+if [[ -d "$LOCAL_BIN_SRC" ]]; then
+  mkdir -p "$LOCAL_BIN_TARGET"
+  for tool_path in "$LOCAL_BIN_SRC"/*; do
+    [[ -f "$tool_path" ]] || continue
+    install -m 755 "$tool_path" "$LOCAL_BIN_TARGET/$(basename "$tool_path")"
+  done
+  log_step "Installed user commands to $LOCAL_BIN_TARGET"
 fi
 
 apply_vscode_settings

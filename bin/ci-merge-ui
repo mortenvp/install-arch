@@ -1,0 +1,613 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "questionary>=2,<3",
+#     "rich>=13.9,<15",
+# ]
+# ///
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, NoReturn
+from urllib.parse import urlparse
+
+import questionary
+from prompt_toolkit.output import create_output
+from rich.console import Console, Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+console = Console(stderr=True)
+prompt_output = create_output(stdout=sys.stderr)
+PR_FIELDS = (
+    "number,title,url,state,isDraft,baseRefName,headRefName,headRefOid,"
+    "mergeable,mergeStateStatus,reviewDecision"
+)
+CHECK_FIELDS = "name,workflow,state,bucket,link"
+POLL_INTERVAL_SECONDS = 10
+
+
+class MergeError(Exception):
+    """An expected failure that should be shown without a traceback."""
+
+
+class UsageError(MergeError):
+    """Invalid command-line usage."""
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    number: int
+    title: str
+    url: str
+    state: str
+    is_draft: bool
+    base_branch: str
+    head_branch: str
+    head_sha: str
+    mergeable: str
+    merge_state: str
+    review_decision: str | None
+
+
+@dataclass(frozen=True)
+class Check:
+    name: str
+    workflow: str
+    state: str
+    bucket: str
+    link: str
+
+
+@dataclass(frozen=True)
+class LocalState:
+    branch: str
+    head_sha: str
+    status: str
+
+
+@dataclass(frozen=True)
+class Inspection:
+    pull_request: PullRequest
+    repository: str
+    local: LocalState
+    checks: list[Check]
+
+
+def fail(message: str) -> NoReturn:
+    raise MergeError(message)
+
+
+def run_process(
+    command: list[str],
+    *,
+    cwd: Path,
+    timeout: int = 30,
+    check: bool = True,
+) -> subprocess.CompletedProcess[bytes]:
+    environment = os.environ.copy()
+    environment["GH_PROMPT_DISABLED"] = "1"
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            timeout=timeout,
+            env=environment,
+        )
+    except FileNotFoundError:
+        fail(f"{command[0]} is not installed")
+    except subprocess.TimeoutExpired:
+        fail(f"{' '.join(command[:3])} timed out after {timeout} seconds")
+
+    if check and result.returncode != 0:
+        detail = (result.stderr or result.stdout).decode(errors="replace").strip()
+        fail(detail or f"{' '.join(command[:3])} failed")
+    return result
+
+
+def run_git(repository: Path, *arguments: str) -> str:
+    result = run_process(["git", *arguments], cwd=repository)
+    return result.stdout.decode(errors="replace").strip()
+
+
+def run_gh(repository: Path, *arguments: str) -> str:
+    result = run_process(["gh", *arguments], cwd=repository)
+    return result.stdout.decode(errors="replace").strip()
+
+
+def gh_json(repository: Path, *arguments: str) -> Any:
+    output = run_gh(repository, *arguments)
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError:
+        fail(f"could not parse JSON returned by gh {' '.join(arguments[:2])}")
+
+
+def find_repository() -> Path:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        fail("git is not installed")
+
+    if result.returncode != 0:
+        fail("the current directory is not in a Git repository")
+    path = os.fsdecode(result.stdout.rstrip(b"\n"))
+    if not path:
+        fail("could not determine the Git repository root")
+    return Path(path)
+
+
+def validate_target(arguments: list[str]) -> str | None:
+    if not arguments:
+        return None
+    if len(arguments) != 1:
+        raise UsageError("usage: ci-merge [PR-number-or-URL]")
+
+    target = arguments[0]
+    if target.isdigit():
+        return target
+
+    parsed = urlparse(target)
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if (
+        parsed.scheme in {"http", "https"}
+        and parsed.netloc
+        and len(path_parts) == 4
+        and path_parts[2] == "pull"
+        and path_parts[3].isdigit()
+    ):
+        return target
+    raise UsageError("pull request must be a number or a GitHub pull request URL")
+
+
+def require_gh_auth(repository: Path) -> None:
+    run_process(["gh", "auth", "status"], cwd=repository)
+
+
+def get_local_state(repository: Path) -> LocalState:
+    return LocalState(
+        branch=run_git(repository, "branch", "--show-current"),
+        head_sha=run_git(repository, "rev-parse", "HEAD"),
+        status=run_git(
+            repository,
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ),
+    )
+
+
+def pull_request_from_json(value: Any) -> PullRequest:
+    if not isinstance(value, dict):
+        fail("GitHub returned an invalid pull request")
+    try:
+        return PullRequest(
+            number=int(value["number"]),
+            title=str(value["title"]),
+            url=str(value["url"]),
+            state=str(value["state"]),
+            is_draft=bool(value["isDraft"]),
+            base_branch=str(value["baseRefName"]),
+            head_branch=str(value["headRefName"]),
+            head_sha=str(value["headRefOid"]),
+            mergeable=str(value["mergeable"]),
+            merge_state=str(value["mergeStateStatus"]),
+            review_decision=(
+                str(value["reviewDecision"])
+                if value.get("reviewDecision") is not None
+                else None
+            ),
+        )
+    except (KeyError, TypeError, ValueError):
+        fail("GitHub returned incomplete pull request data")
+
+
+def get_pull_request(repository: Path, target: str | None) -> PullRequest:
+    arguments = ["pr", "view"]
+    if target is not None:
+        arguments.append(target)
+    arguments.extend(["--json", PR_FIELDS])
+    return pull_request_from_json(gh_json(repository, *arguments))
+
+
+def check_from_json(value: Any) -> Check:
+    if not isinstance(value, dict):
+        fail("GitHub returned an invalid CI check")
+    try:
+        return Check(
+            name=str(value["name"]),
+            workflow=str(value.get("workflow") or ""),
+            state=str(value["state"]),
+            bucket=str(value["bucket"]),
+            link=str(value.get("link") or ""),
+        )
+    except (KeyError, TypeError):
+        fail("GitHub returned incomplete CI check data")
+
+
+def get_checks(repository: Path, pull_request: PullRequest) -> list[Check]:
+    result = run_process(
+        [
+            "gh",
+            "pr",
+            "checks",
+            pull_request.url,
+            "--json",
+            CHECK_FIELDS,
+        ],
+        cwd=repository,
+        check=False,
+    )
+    output = result.stdout.decode(errors="replace").strip()
+    if output:
+        try:
+            parsed = json.loads(output)
+        except json.JSONDecodeError:
+            fail("could not parse CI checks returned by gh")
+        if not isinstance(parsed, list):
+            fail("GitHub returned invalid CI check data")
+        return [check_from_json(check) for check in parsed]
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).decode(errors="replace").strip()
+        if "no checks reported" in detail.lower():
+            return []
+        fail(detail or "gh pr checks failed")
+    return []
+
+
+def repository_selector(pull_request_url: str) -> str:
+    parsed = urlparse(pull_request_url)
+    parts = [part for part in parsed.path.split("/") if part]
+    if not parsed.hostname or len(parts) < 2:
+        fail(f"could not determine the repository from {pull_request_url}")
+    repository = f"{parts[0]}/{parts[1]}"
+    if parsed.hostname == "github.com":
+        return repository
+    return f"{parsed.hostname}/{repository}"
+
+
+def validate_initial_pull_request(pull_request: PullRequest) -> None:
+    if pull_request.state != "OPEN":
+        fail(f"PR #{pull_request.number} is not open ({pull_request.state.lower()})")
+    if pull_request.is_draft:
+        fail(f"PR #{pull_request.number} is a draft")
+    if not pull_request.head_sha:
+        fail("GitHub did not report the pull request head SHA")
+
+
+def validate_identity(current: PullRequest, expected: PullRequest) -> None:
+    if current.state != "OPEN":
+        fail(f"PR #{expected.number} is no longer open ({current.state.lower()})")
+    if current.is_draft:
+        fail(f"PR #{expected.number} became a draft")
+    if current.head_sha != expected.head_sha:
+        fail("the pull request head SHA changed while waiting")
+    if (
+        current.head_branch != expected.head_branch
+        or current.base_branch != expected.base_branch
+    ):
+        fail("the pull request base or head branch changed while waiting")
+
+
+def validate_local_basics(local: LocalState) -> None:
+    if local.status:
+        fail("the working tree has uncommitted, staged, or untracked changes")
+    if not local.branch:
+        fail("HEAD is detached; check out the pull request branch first")
+
+
+def validate_local_state(local: LocalState, pull_request: PullRequest) -> None:
+    validate_local_basics(local)
+    if local.branch != pull_request.head_branch:
+        fail(
+            f"current branch is {local.branch}, but the PR head is "
+            f"{pull_request.head_branch}"
+        )
+    if local.head_sha != pull_request.head_sha:
+        fail(
+            f"local HEAD {local.head_sha[:12]} does not match the pushed PR head "
+            f"{pull_request.head_sha[:12]}; push or synchronize the branch first"
+        )
+
+
+def validate_merge_ready(pull_request: PullRequest) -> None:
+    if pull_request.mergeable != "MERGEABLE":
+        fail(f"GitHub reports the PR as {pull_request.mergeable.lower()}")
+    if pull_request.review_decision in {"CHANGES_REQUESTED", "REVIEW_REQUIRED"}:
+        fail(f"reviews block merging ({pull_request.review_decision})")
+    if pull_request.merge_state not in {"CLEAN", "HAS_HOOKS"}:
+        state = pull_request.merge_state or "UNKNOWN"
+        fail(f"GitHub reports merge state {state}")
+
+
+def evaluate_checks(checks: list[Check]) -> tuple[str, list[Check]]:
+    if not checks:
+        return "none", []
+
+    accepted = {"pass", "skipping"}
+    pending_buckets = {"pending"}
+    blocked = [
+        check
+        for check in checks
+        if check.bucket.lower() not in accepted | pending_buckets
+    ]
+    if blocked:
+        return "blocked", blocked
+
+    pending = [check for check in checks if check.bucket.lower() in pending_buckets]
+    if pending:
+        return "pending", pending
+    return "ready", []
+
+
+def inspect_pull_request(repository: Path, target: str | None) -> Inspection:
+    local = get_local_state(repository)
+    validate_local_basics(local)
+    pull_request = get_pull_request(repository, target)
+    validate_initial_pull_request(pull_request)
+    validate_local_state(local, pull_request)
+
+    selected_repository = repository_selector(pull_request.url)
+    repository_data = gh_json(
+        repository,
+        "repo",
+        "view",
+        selected_repository,
+        "--json",
+        "squashMergeAllowed",
+    )
+    if not isinstance(repository_data, dict) or not repository_data.get(
+        "squashMergeAllowed"
+    ):
+        fail(f"repository {selected_repository} does not allow squash merging")
+
+    checks = get_checks(repository, pull_request)
+    status, affected = evaluate_checks(checks)
+    if status == "none":
+        fail(f"PR #{pull_request.number} has no CI checks")
+    if status == "blocked":
+        names = ", ".join(check.name for check in affected)
+        fail(f"CI already has blocking checks: {names}")
+
+    return Inspection(
+        pull_request=pull_request,
+        repository=selected_repository,
+        local=local,
+        checks=checks,
+    )
+
+
+def check_style(check: Check) -> tuple[str, str]:
+    bucket = check.bucket.lower()
+    if bucket == "pass":
+        return "✓", "green"
+    if bucket == "skipping":
+        return "–", "yellow"
+    if bucket == "pending":
+        return "…", "cyan"
+    return "✗", "red"
+
+
+def checks_table(checks: list[Check], *, next_poll: int | None = None) -> Table:
+    table = Table(show_header=True, header_style="bold", expand=True)
+    table.add_column("", width=1)
+    table.add_column("Check")
+    table.add_column("Workflow")
+    table.add_column("State", no_wrap=True)
+
+    for check in checks:
+        icon, style = check_style(check)
+        table.add_row(
+            Text(icon, style=style),
+            Text(check.name),
+            Text(check.workflow or "—", style="dim"),
+            Text(check.state, style=style),
+        )
+
+    if next_poll is not None:
+        table.caption = f"Refreshing in {next_poll}s · Ctrl-C to cancel"
+    return table
+
+
+def inspection_panel(inspection: Inspection) -> Panel:
+    pull_request = inspection.pull_request
+    details = Table.grid(padding=(0, 2))
+    details.add_column(style="bold", no_wrap=True)
+    details.add_column()
+    details.add_row("Repository", Text(inspection.repository))
+    details.add_row(
+        "Pull request", Text(f"#{pull_request.number} {pull_request.title}")
+    )
+    details.add_row(
+        "Branches", Text(f"{pull_request.base_branch} ← {pull_request.head_branch}")
+    )
+    details.add_row("Head SHA", Text(pull_request.head_sha))
+    details.add_row(
+        "Reviews",
+        Text(pull_request.review_decision or "No review requirement reported"),
+    )
+    details.add_row(
+        "Local branch",
+        Text(f"{inspection.local.branch} · clean · fully pushed", style="green"),
+    )
+    details.add_row("URL", Text(pull_request.url, style="blue underline"))
+
+    return Panel(
+        Group(details, Text(""), checks_table(inspection.checks)),
+        title="CI merge",
+        border_style="cyan",
+    )
+
+
+def confirm_merge(inspection: Inspection) -> bool:
+    console.print(inspection_panel(inspection))
+    try:
+        answer = questionary.confirm(
+            f"Wait for CI and squash-merge PR #{inspection.pull_request.number}?",
+            default=False,
+            output=prompt_output,
+        ).unsafe_ask()
+    except (EOFError, KeyboardInterrupt):
+        console.print("\nCancelled", style="dim")
+        return False
+    return bool(answer)
+
+
+def monitor_until_ready(repository: Path, inspection: Inspection) -> None:
+    expected = inspection.pull_request
+    checks = inspection.checks
+
+    with Live(
+        checks_table(checks, next_poll=0),
+        console=console,
+        refresh_per_second=4,
+        transient=True,
+    ) as live:
+        while True:
+            current = get_pull_request(repository, expected.url)
+            validate_identity(current, expected)
+            validate_local_state(get_local_state(repository), expected)
+            checks = get_checks(repository, expected)
+            status, affected = evaluate_checks(checks)
+
+            if status == "none":
+                fail("CI checks disappeared while waiting")
+            if status == "blocked":
+                names = ", ".join(check.name for check in affected)
+                fail(f"CI has blocking checks: {names}")
+            if status == "ready":
+                live.update(checks_table(checks))
+                return
+
+            for remaining in range(POLL_INTERVAL_SECONDS, 0, -1):
+                live.update(checks_table(checks, next_poll=remaining))
+                time.sleep(1)
+
+
+def revalidate_before_merge(repository: Path, inspection: Inspection) -> None:
+    expected = inspection.pull_request
+    current = get_pull_request(repository, expected.url)
+    validate_identity(current, expected)
+    validate_local_state(get_local_state(repository), expected)
+
+    checks = get_checks(repository, expected)
+    status, affected = evaluate_checks(checks)
+    if status == "blocked":
+        names = ", ".join(check.name for check in affected)
+        fail(f"CI changed before merging; blocking checks: {names}")
+    if status != "ready":
+        fail("CI is no longer fully complete; the pull request was not merged")
+    validate_merge_ready(current)
+
+
+def merge_pull_request(repository: Path, inspection: Inspection) -> str:
+    pull_request = inspection.pull_request
+    result = run_process(
+        [
+            "gh",
+            "pr",
+            "merge",
+            pull_request.url,
+            "--squash",
+            "--match-head-commit",
+            pull_request.head_sha,
+        ],
+        cwd=repository,
+        check=False,
+    )
+
+    merged_data = gh_json(
+        repository,
+        "pr",
+        "view",
+        pull_request.url,
+        "--json",
+        "state,url,mergeCommit",
+    )
+    if not isinstance(merged_data, dict):
+        fail("GitHub returned invalid merge status data")
+    if merged_data.get("state") != "MERGED":
+        detail = (result.stderr or result.stdout).decode(errors="replace").strip()
+        if result.returncode != 0 and detail:
+            fail(detail)
+        state = str(merged_data.get("state") or "unknown").lower()
+        fail(f"GitHub accepted the command, but the PR remains {state}")
+
+    merge_commit = merged_data.get("mergeCommit")
+    if isinstance(merge_commit, dict) and merge_commit.get("oid"):
+        return str(merge_commit["oid"])
+    return ""
+
+
+def print_help() -> None:
+    console.print("Usage: ci-merge [PR-number-or-URL]")
+    console.print("Wait for required CI checks and safely squash-merge a pull request.")
+
+
+def main(arguments: list[str]) -> int:
+    if arguments in (["-h"], ["--help"]):
+        print_help()
+        return 0
+
+    try:
+        target = validate_target(arguments)
+        repository = find_repository()
+        with console.status("Checking GitHub authentication…"):
+            require_gh_auth(repository)
+        with console.status("Inspecting pull request and local branch…"):
+            inspection = inspect_pull_request(repository, target)
+
+        if not confirm_merge(inspection):
+            console.print("Pull request was not merged", style="dim")
+            return 0
+
+        console.print(
+            f"Waiting for CI on PR #{inspection.pull_request.number}…",
+            style="cyan",
+        )
+        monitor_until_ready(repository, inspection)
+
+        with console.status("Revalidating and squash-merging…"):
+            revalidate_before_merge(repository, inspection)
+            merge_commit = merge_pull_request(repository, inspection)
+
+        console.print(
+            f"[bold green]✓ PR #{inspection.pull_request.number} was squash-merged[/bold green]"
+        )
+        console.print(Text(inspection.pull_request.url, style="blue underline"))
+        if merge_commit:
+            console.print(f"Merge commit: {merge_commit}", style="dim")
+        return 0
+    except KeyboardInterrupt:
+        console.print(
+            "\nCancelled; verify the pull request state before retrying",
+            style="yellow",
+        )
+        return 130
+    except UsageError as error:
+        console.print("[bold red]Error:[/bold red]", Text(str(error)))
+        return 2
+    except MergeError as error:
+        console.print("[bold red]Error:[/bold red]", Text(str(error)))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

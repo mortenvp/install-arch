@@ -1,0 +1,560 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "questionary>=2,<3",
+#     "rich>=13.9,<15",
+# ]
+# ///
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import NoReturn, TypeVar
+
+import questionary
+from prompt_toolkit.output import create_output
+from questionary import Choice
+from rich.console import Console
+
+console = Console(stderr=True)
+prompt_output = create_output(stdout=sys.stderr)
+T = TypeVar("T")
+
+
+class WorktreeError(Exception):
+    """An expected error that can be shown directly to the user."""
+
+
+@dataclass(frozen=True)
+class Worktree:
+    path: Path
+    head: str
+    branch: str | None = None
+    bare: bool = False
+    detached: bool = False
+    main: bool = False
+
+
+@dataclass(frozen=True)
+class RemoteBranch:
+    remote: str
+    name: str
+    timestamp: int
+    relative_date: str
+    subject: str
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.remote}/{self.name}"
+
+
+def fail(message: str) -> NoReturn:
+    raise WorktreeError(message)
+
+
+def git_process(
+    *arguments: str,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+        )
+    except FileNotFoundError:
+        fail("git is not installed")
+
+
+def run_git(*arguments: str, cwd: Path | None = None) -> bytes:
+    result = git_process(*arguments, cwd=cwd)
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip()
+        fail(detail or f"git {' '.join(arguments)} failed")
+    return result.stdout
+
+
+def git_succeeds(*arguments: str, cwd: Path | None = None) -> bool:
+    return git_process(*arguments, cwd=cwd).returncode == 0
+
+
+def decode_line(output: bytes) -> str:
+    return output.decode(errors="replace").rstrip("\n")
+
+
+def find_repository() -> Path:
+    output = run_git("rev-parse", "--show-toplevel")
+    repository = os.fsdecode(output.rstrip(b"\n"))
+    if not repository:
+        fail("the current directory is not in a Git repository")
+    return Path(repository)
+
+
+def parse_worktrees(output: bytes) -> list[Worktree]:
+    records: list[list[bytes]] = []
+    record: list[bytes] = []
+
+    for field in output.split(b"\0"):
+        if field:
+            record.append(field)
+        elif record:
+            records.append(record)
+            record = []
+
+    if record:
+        records.append(record)
+
+    worktrees: list[Worktree] = []
+    for index, fields in enumerate(records):
+        values: dict[bytes, bytes] = {}
+        flags: set[bytes] = set()
+
+        for field in fields:
+            key, separator, value = field.partition(b" ")
+            if separator:
+                values[key] = value
+            else:
+                flags.add(key)
+
+        path_value = values.get(b"worktree")
+        head_value = values.get(b"HEAD")
+        if path_value is None or head_value is None:
+            fail("git returned an invalid worktree record")
+
+        branch_value = values.get(b"branch")
+        branch = None
+        if branch_value is not None:
+            branch = branch_value.decode(errors="replace").removeprefix("refs/heads/")
+
+        worktrees.append(
+            Worktree(
+                path=Path(os.fsdecode(path_value)),
+                head=head_value.decode(errors="replace"),
+                branch=branch,
+                bare=b"bare" in flags,
+                detached=b"detached" in flags,
+                main=index == 0,
+            )
+        )
+
+    return worktrees
+
+
+def list_worktrees(repository: Path) -> list[Worktree]:
+    output = run_git("worktree", "list", "--porcelain", "-z", cwd=repository)
+    worktrees = parse_worktrees(output)
+    if not worktrees:
+        fail("no worktrees found")
+    return worktrees
+
+
+def list_remotes(repository: Path) -> list[str]:
+    remotes = decode_line(run_git("remote", cwd=repository)).splitlines()
+    if not remotes:
+        fail("this repository has no remotes")
+    return remotes
+
+
+def list_remote_branches(repository: Path, remotes: list[str]) -> list[RemoteBranch]:
+    branches: list[RemoteBranch] = []
+    format_string = (
+        "%(refname)%00%(committerdate:unix)%00%(committerdate:relative)"
+        "%00%(subject)%00%(symref)"
+    )
+
+    for remote in remotes:
+        prefix = f"refs/remotes/{remote}/"
+        output = run_git(
+            "for-each-ref",
+            "--sort=-committerdate",
+            f"--format={format_string}",
+            prefix,
+            cwd=repository,
+        )
+
+        for line in output.splitlines():
+            fields = line.split(b"\0")
+            if len(fields) != 5:
+                fail("git returned an invalid remote branch record")
+
+            refname, timestamp, relative_date, subject, symref = fields
+            if symref:
+                continue
+
+            decoded_refname = refname.decode(errors="replace")
+            if not decoded_refname.startswith(prefix):
+                continue
+
+            try:
+                decoded_timestamp = int(timestamp or b"0")
+            except ValueError:
+                decoded_timestamp = 0
+
+            branches.append(
+                RemoteBranch(
+                    remote=remote,
+                    name=decoded_refname.removeprefix(prefix),
+                    timestamp=decoded_timestamp,
+                    relative_date=relative_date.decode(errors="replace"),
+                    subject=subject.decode(errors="replace"),
+                )
+            )
+
+    branches.sort(key=lambda branch: (-branch.timestamp, branch.full_name))
+    if not branches:
+        fail("no remote branches found")
+    return branches
+
+
+def ask(question: questionary.Question) -> T | None:
+    try:
+        return question.unsafe_ask()
+    except (EOFError, KeyboardInterrupt):
+        console.print("\nCancelled", style="dim")
+        return None
+
+
+def select_action() -> str | None:
+    console.print("[bold]Git worktree[/bold]")
+    return ask(
+        questionary.select(
+            "What would you like to do?",
+            choices=[
+                Choice("Use an existing remote branch", value="existing"),
+                Choice(
+                    "Create a new branch from the current branch",
+                    value="new",
+                ),
+            ],
+            instruction="(↑/↓ to move, enter to select)",
+            output=prompt_output,
+        )
+    )
+
+
+def select_remote_branch(branches: list[RemoteBranch]) -> RemoteBranch | None:
+    name_width = min(max(len(branch.full_name) for branch in branches), 45)
+    choices = []
+    for branch in branches:
+        name = branch.full_name
+        if len(name) > name_width:
+            name = f"{name[: name_width - 1]}…"
+        title = f"{name:<{name_width}}  {branch.relative_date:<18}  {branch.subject}"
+        choices.append(Choice(title, value=branch))
+
+    console.print("\n[bold]Remote branches[/bold] [dim](newest first)[/dim]")
+    return ask(
+        questionary.select(
+            "Select a branch",
+            choices=choices,
+            instruction="(↑/↓ to move, type to search, enter to select)",
+            use_search_filter=True,
+            use_jk_keys=False,
+            output=prompt_output,
+        )
+    )
+
+
+def branch_component(branch: str) -> str:
+    component = branch.replace("/", "-")
+    component = re.sub(r"[^A-Za-z0-9._-]+", "-", component)
+    component = re.sub(r"^[._-]+|[._-]+$", "", component)
+    return component or "change"
+
+
+def suggested_worktree_path(worktrees: list[Worktree], branch: str) -> Path:
+    main_path = next(
+        (worktree.path for worktree in worktrees if worktree.main),
+        worktrees[0].path,
+    )
+    return main_path.parent / f"{main_path.name}.worktrees" / branch_component(branch)
+
+
+def ask_worktree_path(suggested: Path) -> Path | None:
+    answer = ask(
+        questionary.text(
+            "Worktree path",
+            default=str(suggested),
+            output=prompt_output,
+        )
+    )
+    if answer is None:
+        return None
+
+    path = Path(str(answer)).expanduser().resolve()
+    if path.exists():
+        fail(f"target already exists: {path}")
+    return path
+
+
+def confirm_creation(message: str) -> bool:
+    answer = ask(
+        questionary.confirm(
+            message,
+            default=True,
+            output=prompt_output,
+        )
+    )
+    return bool(answer)
+
+
+def local_branch_exists(repository: Path, branch: str) -> bool:
+    return git_succeeds(
+        "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", cwd=repository
+    )
+
+
+def local_branch_upstream(repository: Path, branch: str) -> str | None:
+    output = run_git(
+        "for-each-ref",
+        "--format=%(upstream:short)",
+        f"refs/heads/{branch}",
+        cwd=repository,
+    )
+    upstream = decode_line(output)
+    return upstream or None
+
+
+def existing_worktree_for_branch(
+    worktrees: list[Worktree], branch: str
+) -> Worktree | None:
+    return next(
+        (worktree for worktree in worktrees if worktree.branch == branch),
+        None,
+    )
+
+
+def use_remote_branch(repository: Path) -> Path | None:
+    with console.status("Fetching all remotes…"):
+        run_git("fetch", "--all", "--prune", cwd=repository)
+
+    remotes = list_remotes(repository)
+    selected = select_remote_branch(list_remote_branches(repository, remotes))
+    if selected is None:
+        return None
+
+    worktrees = list_worktrees(repository)
+    has_local_branch = local_branch_exists(repository, selected.name)
+    upstream = (
+        local_branch_upstream(repository, selected.name) if has_local_branch else None
+    )
+    if upstream is not None and upstream != selected.full_name:
+        fail(
+            f"local branch {selected.name} tracks {upstream}, not {selected.full_name}"
+        )
+
+    existing_worktree = existing_worktree_for_branch(worktrees, selected.name)
+    if existing_worktree is not None:
+        if upstream is None:
+            run_git(
+                "branch",
+                "--set-upstream-to",
+                selected.full_name,
+                selected.name,
+                cwd=repository,
+            )
+        console.print(
+            f"[green]✓[/green] {selected.name} already has a worktree at "
+            f"{existing_worktree.path}"
+        )
+        return existing_worktree.path
+
+    target = ask_worktree_path(suggested_worktree_path(worktrees, selected.name))
+    if target is None:
+        return None
+
+    if not confirm_creation(f"Create {target} from {selected.full_name}?"):
+        return None
+
+    if has_local_branch:
+        run_git("worktree", "add", "--", str(target), selected.name, cwd=repository)
+        try:
+            run_git("merge", "--ff-only", selected.full_name, cwd=target)
+            if upstream is None:
+                run_git(
+                    "branch",
+                    "--set-upstream-to",
+                    selected.full_name,
+                    selected.name,
+                    cwd=target,
+                )
+        except WorktreeError as error:
+            fail(f"worktree created at {target}, but sync failed: {error}")
+    else:
+        run_git(
+            "worktree",
+            "add",
+            "--track",
+            "-b",
+            selected.name,
+            "--",
+            str(target),
+            selected.full_name,
+            cwd=repository,
+        )
+
+    console.print(f"[green]✓[/green] Created {selected.name} at {target}")
+    return target
+
+
+def current_branch(repository: Path) -> str:
+    result = git_process("symbolic-ref", "--quiet", "--short", "HEAD", cwd=repository)
+    if result.returncode != 0:
+        fail("cannot create a branch from a detached HEAD")
+    branch = decode_line(result.stdout)
+    if not branch:
+        fail("could not determine the current branch")
+    return branch
+
+
+def branch_remote(repository: Path, branch: str) -> str:
+    result = git_process("config", "--get", f"branch.{branch}.remote", cwd=repository)
+    remote = decode_line(result.stdout) if result.returncode == 0 else ""
+    if not remote or remote == ".":
+        fail(
+            f"current branch {branch} has no remote upstream; "
+            "set one before creating a new worktree branch"
+        )
+    return remote
+
+
+def valid_branch_name(repository: Path, branch: str) -> bool:
+    return bool(branch) and git_succeeds(
+        "check-ref-format", "--branch", branch, cwd=repository
+    )
+
+
+def ask_new_branch_name(repository: Path) -> str | None:
+    answer = ask(
+        questionary.text(
+            "New branch name",
+            validate=lambda value: (
+                True
+                if valid_branch_name(repository, value)
+                else "Enter a valid Git branch name"
+            ),
+            output=prompt_output,
+        )
+    )
+    return str(answer) if answer is not None else None
+
+
+def remote_branch_exists(repository: Path, remote: str, branch: str) -> bool:
+    result = git_process(
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        remote,
+        f"refs/heads/{branch}",
+        cwd=repository,
+    )
+    if result.returncode == 0:
+        return True
+    if result.returncode == 2:
+        return False
+
+    detail = result.stderr.decode(errors="replace").strip()
+    fail(detail or f"could not query remote {remote}")
+
+
+def create_new_branch(repository: Path) -> Path | None:
+    base_branch = current_branch(repository)
+    remote = branch_remote(repository, base_branch)
+    branch = ask_new_branch_name(repository)
+    if branch is None:
+        return None
+
+    if local_branch_exists(repository, branch):
+        fail(f"local branch already exists: {branch}")
+
+    worktrees = list_worktrees(repository)
+    target = ask_worktree_path(suggested_worktree_path(worktrees, branch))
+    if target is None:
+        return None
+
+    console.print(f"\nBase branch: [bold]{base_branch}[/bold]")
+    console.print(f"New branch:  [bold]{branch}[/bold]")
+    console.print(f"Remote:      [bold]{remote}[/bold]")
+    console.print(f"Worktree:    [bold]{target}[/bold]")
+    if not confirm_creation("Pull the base branch, create, and publish this branch?"):
+        return None
+
+    with console.status(f"Updating {base_branch}…"):
+        run_git("pull", "--ff-only", cwd=repository)
+
+    if remote_branch_exists(repository, remote, branch):
+        fail(
+            f"remote branch {remote}/{branch} already exists; "
+            "choose the existing remote branch instead"
+        )
+
+    run_git(
+        "worktree",
+        "add",
+        "-b",
+        branch,
+        "--",
+        str(target),
+        base_branch,
+        cwd=repository,
+    )
+
+    try:
+        with console.status(f"Publishing {remote}/{branch}…"):
+            run_git(
+                "push",
+                "--set-upstream",
+                remote,
+                branch,
+                cwd=target,
+            )
+    except WorktreeError as error:
+        fail(f"worktree created at {target}, but publish failed: {error}")
+
+    console.print(
+        f"[green]✓[/green] Created and published {remote}/{branch} at {target}"
+    )
+    return target
+
+
+def print_help() -> None:
+    console.print("Usage: wt")
+    console.print("Create or enter a worktree from an interactive branch selector.")
+
+
+def main(arguments: list[str]) -> int:
+    if arguments:
+        if arguments in (["-h"], ["--help"]):
+            print_help()
+            return 0
+        console.print("[red]error:[/red]", f"unsupported argument: {arguments[0]}")
+        print_help()
+        return 2
+
+    try:
+        repository = find_repository()
+        action = select_action()
+        if action == "existing":
+            selected_path = use_remote_branch(repository)
+        elif action == "new":
+            selected_path = create_new_branch(repository)
+        else:
+            selected_path = None
+    except WorktreeError as error:
+        console.print("[red]error:[/red]", str(error))
+        return 1
+
+    if selected_path is not None:
+        print(selected_path)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
