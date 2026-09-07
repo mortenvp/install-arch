@@ -5,7 +5,12 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=scripts/logging.sh
 source "$SCRIPT_DIR/logging.sh"
 
-KEYBINDINGS_PROFILE="${GNOME_KEYBINDINGS_PROFILE:-laptop}"
+if ! command -v gsettings >/dev/null 2>&1; then
+  log_step "gsettings not available; skipping GNOME keybindings"
+  exit 0
+fi
+
+KEYBINDINGS_PROFILE=$("$SCRIPT_DIR/select-gnome-keybindings-profile.sh")
 case "$KEYBINDINGS_PROFILE" in
   laptop)
     KEY_MODIFIER='<Control><Alt>'
@@ -20,11 +25,6 @@ case "$KEYBINDINGS_PROFILE" in
     exit 1
     ;;
 esac
-
-if ! command -v gsettings >/dev/null 2>&1; then
-  log_step "gsettings not available; skipping GNOME keybindings"
-  exit 0
-fi
 
 log_step "Applying GNOME keybindings"
 log_step "GNOME keybindings profile: $KEYBINDINGS_PROFILE (modifier: $KEY_MODIFIER, overlay: $OVERLAY_KEY)"

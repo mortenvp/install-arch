@@ -11,6 +11,11 @@ if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   exit 1
 fi
 
+if [[ "${SKIP_GNOME_KEYBINDINGS:-}" != "1" ]]; then
+  GNOME_KEYBINDINGS_PROFILE=$("$ROOT_DIR/scripts/select-gnome-keybindings-profile.sh")
+  export GNOME_KEYBINDINGS_PROFILE
+fi
+
 if [[ "${SKIP_LIX_REMOVAL:-}" == "1" ]]; then
   log_step "Skipping Lix removal (SKIP_LIX_REMOVAL=1)"
 else

@@ -10,7 +10,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `config/`: files copied into `~/.config/`.
 - `bin/`: user commands installed into `~/.local/bin/`.
 - `scripts/`: install/config helpers.
-  - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, and `tailscale`.
+  - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, Claude Code (official installer), and `tailscale`.
 - `install.sh`: main entry point.
 
 ## Install
@@ -21,8 +21,11 @@ Run the top-level installer:
 ./install.sh
 ```
 
-By default, GNOME keybindings use the `laptop` profile (`<Control><Alt>...`).
-To switch to the `desktop` profile (`<Alt>...`), run:
+At startup, an interactive GNOME keybinding selector guesses whether this is a laptop or desktop and highlights that profile. Use **↑ / ↓** to choose and **Enter** to confirm (**Esc** or **Ctrl+C** cancels before installation starts).
+
+Detection uses the machine's chassis type, falling back to a system battery when needed (not mouse/keyboard batteries). If neither gives a laptop signal, it defaults to `desktop`. Docked laptops still default to `laptop`.
+
+The prompt also works with `curl | bash`. Without a usable terminal, the detected profile is used automatically. Set `GNOME_KEYBINDINGS_PROFILE=laptop` or `desktop` to bypass the prompt and force a profile:
 
 ```bash
 GNOME_KEYBINDINGS_PROFILE=desktop ./install.sh
@@ -31,6 +34,20 @@ GNOME_KEYBINDINGS_PROFILE=desktop ./install.sh
 This also controls the Home folder shortcut and overview key:
 - `laptop`: home `<Control><Alt>f`, overview `Super`
 - `desktop`: home `<Alt>f`, overview `Super_L` (left Super only)
+
+To choose and apply just the keybindings again:
+
+```bash
+./scripts/apply-gnome-keybindings.sh
+```
+
+`SKIP_GNOME_KEYBINDINGS=1 ./install.sh` skips both the selector and keybinding changes.
+
+Test profile detection and the terminal selector without changing system settings:
+
+```bash
+python testing/test-gnome-keybindings-profile.py
+```
 
 ## Test on a fresh Arch VM (Vagrant)
 
@@ -98,7 +115,7 @@ Like Omarchy, you can bootstrap with a single command (after publishing):
 curl -fsSL https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh | bash
 ```
 
-Use the GNOME desktop keybinding profile during bootstrap:
+To bypass the selector and force the GNOME desktop keybinding profile during bootstrap:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh | GNOME_KEYBINDINGS_PROFILE=desktop bash
@@ -117,7 +134,7 @@ This will:
 4. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 6. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
-7. Install upstream tools (`devbox`, `uv`, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
+7. Install upstream tools (`devbox`, `uv`, Claude Code, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
 8. Install user commands from `bin/` and apply configs from `config/`.
 9. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
 10. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
@@ -141,8 +158,10 @@ Skip optional steps:
 SKIP_LIX_REMOVAL=1 ./install.sh
 SKIP_NIX=1 ./install.sh
 SKIP_SHELL=1 ./install.sh
+SKIP_CLAUDE_CODE=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
+SKIP_GNOME_KEYBINDINGS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
@@ -166,6 +185,24 @@ Run it manually:
 
 ```bash
 ./scripts/install-warp-terminal.sh
+```
+
+## Claude Code (official installer)
+
+`install.sh` runs `scripts/install-claude-code.sh`, which uses the official native installer at `https://claude.ai/install.sh` (no npm or AUR package). It installs the `claude` command into `~/.local/bin`, already included in this repo's Fish `PATH`, and skips installation when Claude Code is already present.
+
+Run it manually as your normal user:
+
+```bash
+./scripts/install-claude-code.sh
+```
+
+Then run `claude` and sign in. Native installations update automatically.
+
+Opt out for a run:
+
+```bash
+SKIP_CLAUDE_CODE=1 ./install.sh
 ```
 
 ## Media codecs (auto-detect + install)

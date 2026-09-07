@@ -14,6 +14,13 @@ fi
 
 "$SCRIPT_DIR/install-devbox.sh"
 "$SCRIPT_DIR/install-uv.sh"
+
+if [[ "${SKIP_CLAUDE_CODE:-}" == "1" ]]; then
+  log_step "Skipping Claude Code (SKIP_CLAUDE_CODE=1)"
+else
+  "$SCRIPT_DIR/install-claude-code.sh"
+fi
+
 "$SCRIPT_DIR/install-tailscale.sh"
 "$SCRIPT_DIR/install-pi-dev.sh"
 "$SCRIPT_DIR/install-pi-agent-stuff.sh"
