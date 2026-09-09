@@ -7,7 +7,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `packages/base.packages`: pacman packages you always want.
 - `packages/aur.packages`: AUR packages installed with `yay`.
 - `packages/vscode.extensions`: VS Code extensions installed with `code`.
-- `config/`: files copied into `~/.config/`.
+- `config/`: user configuration files, generally copied into `~/.config/` (Claude Code settings go into `~/.claude/`).
 - `bin/`: user commands installed into `~/.local/bin/`.
 - `scripts/`: install/config helpers.
   - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, Claude Code (official installer), and `tailscale`.
@@ -199,7 +199,17 @@ Run it manually as your normal user:
 
 Then run `claude` and sign in. Native installations update automatically.
 
-Opt out for a run:
+The config step (`scripts/apply-config.sh`) also runs `scripts/configure-claude-code.sh`. It merges `config/claude/settings.json` into `~/.claude/settings.json`, setting `attribution.commit` to `""` to disable Claude's `Co-Authored-By` commit attribution and `attribution.sessionUrl` to `false` to omit session links from commits and PRs. Other settings, including PR attribution text, are preserved. Invalid existing JSON is left untouched and reported as an error.
+
+Apply just the Claude Code settings (also works for an existing installation):
+
+```bash
+./scripts/configure-claude-code.sh
+```
+
+If you use a custom Claude directory, set `CLAUDE_CONFIG_DIR` when running the configuration script or installer; settings are then merged into `$CLAUDE_CONFIG_DIR/settings.json`. Project or managed Claude settings can override these user-level defaults.
+
+Skip both Claude Code installation and configuration for a run:
 
 ```bash
 SKIP_CLAUDE_CODE=1 ./install.sh
@@ -344,6 +354,7 @@ Configure VS Code keybindings only:
 - VS Code settings: `config/Code/User/settings.json` merged into `~/.config/Code/User/settings.json` (adds missing keys; prompts on conflicts when interactive; non-interactive runs overwrite conflicting keys with repo defaults).
 - VS Code keybindings: `scripts/configure-vscode-keybindings.sh` ensures `Alt+Q` is bound to Rewrap Revived (`rewrap.rewrapComment`) and `Ctrl+Shift+S` is bound to Save All (`workbench.action.files.saveAll`) in `~/.config/Code/User/keybindings.json`.
 - OpenCode config: `config/opencode/opencode.json` (copied to `~/.config/opencode/opencode.json`) and includes the Warp plugin (`@warp-dot-dev/opencode-warp`).
+- Claude Code settings: `config/claude/settings.json` (merged into `~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`) disables commit attribution and session links without replacing other settings.
 
 Apply configs and user commands only:
 

@@ -138,6 +138,12 @@ if [[ -f "$VSCODE_SETTINGS_SRC" ]] && ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ "${SKIP_CLAUDE_CODE:-}" == "1" ]]; then
+  log_step "Skipping Claude Code settings (SKIP_CLAUDE_CODE=1)"
+else
+  "$SCRIPT_DIR/configure-claude-code.sh"
+fi
+
 if command -v git >/dev/null 2>&1; then
   EXISTING_GIT_NAME=$(git config --global --get user.name || true)
   EXISTING_GIT_EMAIL=$(git config --global --get user.email || true)
@@ -151,7 +157,11 @@ fi
 # Copy ~/.config files
 if [[ -d "$ROOT_DIR/config" ]]; then
   mkdir -p "$HOME/.config"
-  cp -R "$ROOT_DIR/config/"* "$HOME/.config/" 2>/dev/null || true
+  for config_path in "$ROOT_DIR/config/"*; do
+    # Claude Code uses ~/.claude (or CLAUDE_CONFIG_DIR), not ~/.config/claude.
+    [[ "$config_path" == "$ROOT_DIR/config/claude" ]] && continue
+    cp -R "$config_path" "$HOME/.config/" 2>/dev/null || true
+  done
 fi
 
 # Install user commands as executables.
