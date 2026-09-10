@@ -144,6 +144,18 @@ else
   "$SCRIPT_DIR/configure-claude-code.sh"
 fi
 
+if [[ "${SKIP_PI_SETTINGS:-}" == "1" ]]; then
+  log_step "Skipping Pi settings (SKIP_PI_SETTINGS=1)"
+else
+  "$SCRIPT_DIR/configure-pi.sh"
+fi
+
+if [[ "${SKIP_WARP_SETTINGS:-}" == "1" ]]; then
+  log_step "Skipping Warp settings (SKIP_WARP_SETTINGS=1)"
+else
+  "$SCRIPT_DIR/configure-warp-terminal.sh"
+fi
+
 if command -v git >/dev/null 2>&1; then
   EXISTING_GIT_NAME=$(git config --global --get user.name || true)
   EXISTING_GIT_EMAIL=$(git config --global --get user.email || true)
@@ -158,8 +170,9 @@ fi
 if [[ -d "$ROOT_DIR/config" ]]; then
   mkdir -p "$HOME/.config"
   for config_path in "$ROOT_DIR/config/"*; do
-    # Claude Code uses ~/.claude (or CLAUDE_CONFIG_DIR), not ~/.config/claude.
+    # Claude Code and Pi use their own config directories rather than ~/.config.
     [[ "$config_path" == "$ROOT_DIR/config/claude" ]] && continue
+    [[ "$config_path" == "$ROOT_DIR/config/pi" ]] && continue
     cp -R "$config_path" "$HOME/.config/" 2>/dev/null || true
   done
 fi

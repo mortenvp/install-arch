@@ -135,7 +135,7 @@ This will:
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 6. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
 7. Install upstream tools (`devbox`, `uv`, Claude Code, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
-8. Install user commands from `bin/` and apply configs from `config/`.
+8. Install user commands from `bin/`, apply configs from `config/`, bind Warp voice input to Right Super, and configure Pi to start with GPT-6 Astra at xhigh thinking.
 9. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
 10. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
 11. Apply audio defaults (disable WirePlumber auto-switch to Bluetooth headset profile when recording).
@@ -159,6 +159,8 @@ SKIP_LIX_REMOVAL=1 ./install.sh
 SKIP_NIX=1 ./install.sh
 SKIP_SHELL=1 ./install.sh
 SKIP_CLAUDE_CODE=1 ./install.sh
+SKIP_PI_SETTINGS=1 ./install.sh
+SKIP_WARP_SETTINGS=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_KEYBINDINGS=1 ./install.sh
@@ -187,6 +189,14 @@ Run it manually:
 ./scripts/install-warp-terminal.sh
 ```
 
+The config step updates only `agents.voice.voice_input_toggle_key` in `~/.config/warp-terminal/settings.toml`, setting it to Warp's `super_right` value. Existing Warp settings are preserved. Apply just this setting with:
+
+```bash
+./scripts/configure-warp-terminal.sh
+```
+
+Opt out for a run with `SKIP_WARP_SETTINGS=1 ./install.sh`.
+
 ## Claude Code (official installer)
 
 `install.sh` runs `scripts/install-claude-code.sh`, which uses the official native installer at `https://claude.ai/install.sh` (no npm or AUR package). It installs the `claude` command into `~/.local/bin`, already included in this repo's Fish `PATH`, and skips installation when Claude Code is already present.
@@ -214,6 +224,18 @@ Skip both Claude Code installation and configuration for a run:
 ```bash
 SKIP_CLAUDE_CODE=1 ./install.sh
 ```
+
+## Pi coding agent defaults
+
+The config step merges `config/pi/settings.json` into `~/.pi/agent/settings.json`. It configures `openai-codex/gpt-6-astra` as the startup model with the `xhigh` thinking level while preserving unrelated settings and installed packages.
+
+Apply just the Pi defaults with:
+
+```bash
+./scripts/configure-pi.sh
+```
+
+Set `PI_CODING_AGENT_DIR` to use a custom Pi config directory, or opt out for a run with `SKIP_PI_SETTINGS=1 ./install.sh`.
 
 ## Media codecs (auto-detect + install)
 
@@ -354,6 +376,8 @@ Configure VS Code keybindings only:
 - VS Code settings: `config/Code/User/settings.json` merged into `~/.config/Code/User/settings.json` (adds missing keys; prompts on conflicts when interactive; non-interactive runs overwrite conflicting keys with repo defaults).
 - VS Code keybindings: `scripts/configure-vscode-keybindings.sh` ensures `Alt+Q` is bound to Rewrap Revived (`rewrap.rewrapComment`) and `Ctrl+Shift+S` is bound to Save All (`workbench.action.files.saveAll`) in `~/.config/Code/User/keybindings.json`.
 - OpenCode config: `config/opencode/opencode.json` (copied to `~/.config/opencode/opencode.json`) and includes the Warp plugin (`@warp-dot-dev/opencode-warp`).
+- Warp settings: `scripts/configure-warp-terminal.sh` preserves existing settings and sets the voice input toggle to Right Super in `~/.config/warp-terminal/settings.toml`.
+- Pi settings: `config/pi/settings.json` is merged into `~/.pi/agent/settings.json`, selecting `openai-codex/gpt-6-astra` with `xhigh` thinking while preserving unrelated settings.
 - Claude Code settings: `config/claude/settings.json` (merged into `~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`) disables commit attribution and session links without replacing other settings.
 
 Apply configs and user commands only:
