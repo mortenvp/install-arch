@@ -5,6 +5,11 @@
 	br = branch
 	ci = commit
 	st = status
+# Use SSH only for these GitHub owners; leave other HTTPS URLs unchanged.
+[url "git@github.com:mortenvp/"]
+	insteadOf = https://github.com/mortenvp/
+[url "git@github.com:steinwurf/"]
+	insteadOf = https://github.com/steinwurf/
 [init]
 	defaultBranch = master
 [pull]
