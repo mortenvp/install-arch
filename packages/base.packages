@@ -21,6 +21,7 @@ power-profiles-daemon
 kernel-modules-hook
 
 # Storage and disk utilities
+sshfs
 util-linux
 dosfstools
 gnome-disk-utility
