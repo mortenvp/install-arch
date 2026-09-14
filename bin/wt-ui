@@ -232,6 +232,7 @@ def select_action() -> str | None:
                     "Create a new branch from the current branch",
                     value="new",
                 ),
+                Choice("Delete an existing worktree", value="delete"),
             ],
             instruction="(↑/↓ to move, enter to select)",
             output=prompt_output,
@@ -294,11 +295,11 @@ def ask_worktree_path(suggested: Path) -> Path | None:
     return path
 
 
-def confirm_creation(message: str) -> bool:
+def confirm(message: str, *, default: bool = True) -> bool:
     answer = ask(
         questionary.confirm(
             message,
-            default=True,
+            default=default,
             output=prompt_output,
         )
     )
@@ -370,7 +371,7 @@ def use_remote_branch(repository: Path) -> Path | None:
     if target is None:
         return None
 
-    if not confirm_creation(f"Create {target} from {selected.full_name}?"):
+    if not confirm(f"Create {target} from {selected.full_name}?"):
         return None
 
     if has_local_branch:
@@ -483,7 +484,7 @@ def create_new_branch(repository: Path) -> Path | None:
     console.print(f"New branch:  [bold]{branch}[/bold]")
     console.print(f"Remote:      [bold]{remote}[/bold]")
     console.print(f"Worktree:    [bold]{target}[/bold]")
-    if not confirm_creation("Pull the base branch, create, and publish this branch?"):
+    if not confirm("Pull the base branch, create, and publish this branch?"):
         return None
 
     with console.status(f"Updating {base_branch}…"):
@@ -524,9 +525,199 @@ def create_new_branch(repository: Path) -> Path | None:
     return target
 
 
+def main_worktree(worktrees: list[Worktree]) -> Worktree:
+    return next(
+        (worktree for worktree in worktrees if worktree.main),
+        worktrees[0],
+    )
+
+
+def select_worktree(worktrees: list[Worktree]) -> Worktree | None:
+    path_width = min(max(len(str(worktree.path)) for worktree in worktrees), 60)
+    choices = []
+    for worktree in worktrees:
+        path = str(worktree.path)
+        if len(path) > path_width:
+            path = f"…{path[-(path_width - 1) :]}"
+        if worktree.branch is not None:
+            ref = worktree.branch
+        else:
+            ref = f"detached at {worktree.head[:12]}"
+        choices.append(Choice(f"{path:<{path_width}}  {ref}", value=worktree))
+
+    console.print("\n[bold]Worktrees[/bold]")
+    return ask(
+        questionary.select(
+            "Select a worktree to delete",
+            choices=choices,
+            instruction="(↑/↓ to move, type to search, enter to select)",
+            use_search_filter=True,
+            use_jk_keys=False,
+            output=prompt_output,
+        )
+    )
+
+
+def worktree_is_dirty(worktree: Path) -> bool:
+    output = run_git("status", "--porcelain", "--ignore-submodules", "-z", cwd=worktree)
+    return bool(output.strip(b"\0"))
+
+
+def upstream_parts(repository: Path, branch: str) -> tuple[str, str] | None:
+    """Return (remote, remote branch name) for the branch's upstream, if any."""
+    remote_result = git_process(
+        "config", "--get", f"branch.{branch}.remote", cwd=repository
+    )
+    merge_result = git_process(
+        "config", "--get", f"branch.{branch}.merge", cwd=repository
+    )
+    if remote_result.returncode != 0 or merge_result.returncode != 0:
+        return None
+
+    remote = decode_line(remote_result.stdout)
+    merge = decode_line(merge_result.stdout)
+    if not remote or remote == "." or not merge.startswith("refs/heads/"):
+        return None
+    return remote, merge.removeprefix("refs/heads/")
+
+
+def remote_tracking_ref_exists(repository: Path, remote: str, branch: str) -> bool:
+    return git_succeeds(
+        "show-ref",
+        "--verify",
+        "--quiet",
+        f"refs/remotes/{remote}/{branch}",
+        cwd=repository,
+    )
+
+
+def remote_default_branch(repository: Path, remote: str) -> str | None:
+    result = git_process(
+        "symbolic-ref", "--quiet", f"refs/remotes/{remote}/HEAD", cwd=repository
+    )
+    if result.returncode != 0:
+        return None
+    return decode_line(result.stdout).removeprefix(f"refs/remotes/{remote}/")
+
+
+def count_commits(repository: Path, revision_range: str) -> int:
+    output = decode_line(run_git("rev-list", "--count", revision_range, cwd=repository))
+    try:
+        return int(output)
+    except ValueError:
+        return 0
+
+
+def delete_local_branch(repository: Path, branch: str) -> bool:
+    result = git_process("branch", "-d", branch, cwd=repository)
+    if result.returncode == 0:
+        return True
+
+    detail = result.stderr.decode(errors="replace").strip()
+    console.print(f"[yellow]![/yellow] {detail or 'git branch -d failed'}")
+    if not confirm(f"Force delete local branch {branch}?", default=False):
+        return False
+    run_git("branch", "-D", branch, cwd=repository)
+    return True
+
+
+def delete_worktree(repository: Path) -> Path | None:
+    worktrees = list_worktrees(repository)
+    main = main_worktree(worktrees)
+    candidates = [
+        worktree for worktree in worktrees if not worktree.main and not worktree.bare
+    ]
+    if not candidates:
+        fail("there are no linked worktrees to delete")
+
+    selected = select_worktree(candidates)
+    if selected is None:
+        return None
+
+    # Run every remaining git command from the main worktree, since the
+    # selected worktree (and possibly the current directory) is going away.
+    repository = main.path
+    current_directory = Path.cwd().resolve()
+    inside_selected = current_directory.is_relative_to(selected.path.resolve())
+
+    branch = selected.branch
+    upstream = upstream_parts(repository, branch) if branch is not None else None
+    upstream_name = f"{upstream[0]}/{upstream[1]}" if upstream is not None else None
+    remote_exists = False
+    unpushed = 0
+    if upstream is not None:
+        remote, remote_branch = upstream
+        with console.status(f"Fetching {remote}…"):
+            run_git("fetch", "--prune", remote, cwd=repository)
+        remote_exists = remote_tracking_ref_exists(repository, remote, remote_branch)
+        if remote_exists:
+            unpushed = count_commits(repository, f"{upstream_name}..{branch}")
+
+    path_missing = not selected.path.exists()
+    dirty = not path_missing and worktree_is_dirty(selected.path)
+
+    console.print(f"\nWorktree: [bold]{selected.path}[/bold]")
+    if branch is not None:
+        console.print(f"Branch:   [bold]{branch}[/bold]")
+    else:
+        console.print(f"HEAD:     [bold]{selected.head[:12]}[/bold] (detached)")
+    if upstream_name is not None:
+        if remote_exists:
+            state = f"{unpushed} unpushed commit(s)" if unpushed else "up to date"
+            console.print(f"Upstream: [bold]{upstream_name}[/bold] ({state})")
+        else:
+            console.print(f"Upstream: [bold]{upstream_name}[/bold] (gone)")
+    elif branch is not None:
+        console.print("Upstream: [dim]none[/dim]")
+    if path_missing:
+        console.print("Status:   [yellow]directory is missing[/yellow]")
+    elif dirty:
+        console.print("Status:   [yellow]uncommitted changes[/yellow]")
+    else:
+        console.print("Status:   clean")
+
+    if dirty:
+        if not confirm(
+            "Remove this worktree and discard its uncommitted changes?",
+            default=False,
+        ):
+            return None
+    elif not confirm(f"Remove worktree {selected.path}?"):
+        return None
+
+    remove_arguments = ["worktree", "remove"]
+    if dirty or path_missing:
+        remove_arguments.append("--force")
+    run_git(*remove_arguments, "--", str(selected.path), cwd=repository)
+    console.print(f"[green]✓[/green] Removed worktree {selected.path}")
+
+    if branch is not None:
+        if confirm(f"Delete local branch {branch}?") and delete_local_branch(
+            repository, branch
+        ):
+            console.print(f"[green]✓[/green] Deleted local branch {branch}")
+
+        if upstream is not None and remote_exists:
+            remote, remote_branch = upstream
+            if remote_branch == remote_default_branch(repository, remote):
+                console.print(
+                    f"[yellow]![/yellow] {upstream_name} is the default branch "
+                    f"of {remote}; not deleting it"
+                )
+            elif confirm(f"Delete remote branch {upstream_name}?"):
+                with console.status(f"Deleting {upstream_name}…"):
+                    run_git("push", remote, "--delete", remote_branch, cwd=repository)
+                console.print(f"[green]✓[/green] Deleted remote branch {upstream_name}")
+
+    if inside_selected:
+        console.print(f"Moving to the main worktree at {main.path}")
+        return main.path
+    return None
+
+
 def print_help() -> None:
     console.print("Usage: wt")
-    console.print("Create or enter a worktree from an interactive branch selector.")
+    console.print("Create, enter, or delete a worktree from an interactive selector.")
 
 
 def main(arguments: list[str]) -> int:
@@ -545,6 +736,8 @@ def main(arguments: list[str]) -> int:
             selected_path = use_remote_branch(repository)
         elif action == "new":
             selected_path = create_new_branch(repository)
+        elif action == "delete":
+            selected_path = delete_worktree(repository)
         else:
             selected_path = None
     except WorktreeError as error:

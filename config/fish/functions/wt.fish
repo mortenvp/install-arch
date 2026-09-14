@@ -1,4 +1,4 @@
-function wt --description 'Create or enter a Git worktree'
+function wt --description 'Create, enter, or delete a Git worktree'
     if not command -q wt-ui
         echo 'wt: wt-ui is not installed or is not on PATH' >&2
         return 127
