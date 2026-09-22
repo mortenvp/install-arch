@@ -78,6 +78,12 @@ else
   "$ROOT_DIR/scripts/apply-gnome-theme.sh"
 fi
 
+if [[ "${SKIP_GNOME_POWER:-}" == "1" ]]; then
+  log_step "Skipping GNOME power defaults (SKIP_GNOME_POWER=1)"
+else
+  "$ROOT_DIR/scripts/apply-gnome-power.sh"
+fi
+
 if [[ "${SKIP_AUDIO_TWEAKS:-}" == "1" ]]; then
   log_step "Skipping audio defaults (SKIP_AUDIO_TWEAKS=1)"
 else

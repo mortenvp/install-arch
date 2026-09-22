@@ -35,6 +35,8 @@ This also controls the Home folder shortcut and overview key:
 - `laptop`: home `<Control><Alt>f`, overview `Super`
 - `desktop`: home `<Alt>f`, overview `Super_L` (left Super only)
 
+The selected profile also controls [GNOME power defaults](#gnome-power-defaults): desktops stay awake with no idle screen blanking or dimming; laptop power settings are left unchanged.
+
 To choose and apply just the keybindings again:
 
 ```bash
@@ -146,7 +148,7 @@ This will:
 16. Enable and start `sshd.service` with `systemctl`.
 17. Enable and start `tailscaled.service` with `systemctl` when available.
 18. Set the default shell to fish.
-19. Apply GNOME keybindings, default to 8 workspaces, set dark mode, and use a 24-hour clock (if GNOME settings are available).
+19. Apply GNOME keybindings, default to 8 workspaces, set dark mode, use a 24-hour clock, and disable idle screen blanking, dimming, and automatic suspend for desktops (if GNOME settings are available).
 20. Enable GNOME extensions for Pop Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
 21. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
 22. Add GNOME autostart entry for `pear-desktop`.
@@ -166,6 +168,7 @@ SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_KEYBINDINGS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
+SKIP_GNOME_POWER=1 ./install.sh
 SKIP_AUDIO_TWEAKS=1 ./install.sh
 SKIP_NVIDIA_DISPLAY=1 ./install.sh
 SKIP_PTRACE_SCOPE=1 ./install.sh
@@ -270,6 +273,26 @@ Check only (no installation or initramfs rebuild):
 
 ```bash
 ./scripts/configure-nvidia-display.sh --check
+```
+
+## GNOME power defaults
+
+`install.sh` runs `scripts/apply-gnome-power.sh`. For the `desktop` profile it sets screen blanking to **Never** (`idle-delay=0`), disables idle dimming, and disables automatic idle suspend on both AC and battery power. The `laptop` profile leaves all existing power settings unchanged.
+
+It reuses `GNOME_KEYBINDINGS_PROFILE` from the startup selector. When run standalone or with `SKIP_GNOME_KEYBINDINGS=1`, it uses hardware detection unless that variable is explicitly set; it never opens an extra prompt.
+
+Apply just these settings as your normal user:
+
+```bash
+./scripts/apply-gnome-power.sh
+```
+
+Use `GNOME_KEYBINDINGS_PROFILE=desktop` or `laptop` to override detection. Set `SKIP_GNOME_POWER=1 ./install.sh` to leave power settings untouched. These are user-session idle settings; manual locking/suspend and the GDM login screen are unchanged.
+
+Test without changing system settings:
+
+```bash
+python testing/test-gnome-power.py
 ```
 
 ## GDM monitor layout
