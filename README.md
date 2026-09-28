@@ -417,11 +417,27 @@ From any Git worktree, run:
 wt
 ```
 
-`wt` first offers three interactive, arrow-key-driven flows:
+`wt` first offers four interactive, arrow-key-driven flows:
 
 - **Use an existing remote branch:** fetch and prune all Git remotes, show remote branches newest-first by commit date, and create a tracking worktree (or enter its existing worktree).
 - **Create a new branch:** update the current branch with `git pull --ff-only`, create the branch in a new worktree, and publish it with `git push --set-upstream` to the current branch's remote.
 - **Delete an existing worktree:** pick a linked worktree (the main worktree is never offered), see its branch, upstream, unpushed commits, and dirty state, then remove it with `git worktree remove`. Deleting the local and remote branch are separate confirmations that default to **Yes**; discarding uncommitted changes and force-deleting an unmerged local branch default to **No**, and the remote's default branch is never deleted. If you delete the worktree you are standing in, `wt` moves you to the main worktree.
+- **Clean up worktrees:** fetch and prune all remotes, then review clean linked worktrees in a multi-select list. Suggestions show merge ancestry against the upstream remote's default branch (when known), a gone upstream, and unpushed commits. Without a remote upstream, merge ancestry is checked against any known remote default branch. Missing worktree directories are also offered for registration removal. The main worktree and dirty, locked, or detached worktrees are skipped. Ignored files (such as build output, caches, and virtual environments) do not block cleanup and are deleted with the worktree; affected worktrees are labeled. No boxes are checked initially. Press **Enter** to delete the highlighted worktree, or check multiple worktrees with **Space** and press **Enter** to delete only those checked. There is **no additional confirmation**. Press **Ctrl+C** to cancel without deleting anything. Cleanup rechecks each worktree, never forces removal, and **keeps all local and remote branches**, including unpushed commits. If your current worktree is removed, `wt` moves you to the main worktree.
+
+Jump directly to cleanup with either command:
+
+```fish
+wt cleanup
+wt prune
+```
+
+A clean worktree only means there are no uncommitted changes—not that its branch was merged. A gone upstream is not proof of a merge either. Merge labels use Git ancestry against locally known remote default refs (`<remote>/HEAD`); squash/rebase merges may not be recognized. Use **Delete an existing worktree** if you also want to delete branches. Unlike `git worktree prune`, this cleanup flow can remove actual worktree directories after review, not just stale registrations.
+
+Test the cleanup flow with disposable local repositories (no installation required):
+
+```bash
+uv run --script testing/test-wt-ui.py
+```
 
 The `wt-ui` executable uses Questionary for selection and Rich for terminal output. Its PEP 723 metadata lets it run through `uv` with isolated Python dependencies. UI is written to stderr; only the selected path is written to stdout for the Fish wrapper to consume and `cd` into.
 

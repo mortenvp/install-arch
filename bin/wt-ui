@@ -20,6 +20,7 @@ from typing import NoReturn, TypeVar
 import questionary
 from prompt_toolkit.output import create_output
 from questionary import Choice
+from questionary.prompts.common import InquirerControl
 from rich.console import Console
 
 console = Console(stderr=True)
@@ -39,6 +40,13 @@ class Worktree:
     bare: bool = False
     detached: bool = False
     main: bool = False
+    locked: bool = False
+
+
+@dataclass(frozen=True)
+class CleanupCandidate:
+    worktree: Worktree
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -141,6 +149,7 @@ def parse_worktrees(output: bytes) -> list[Worktree]:
                 bare=b"bare" in flags,
                 detached=b"detached" in flags,
                 main=index == 0,
+                locked=b"locked" in flags or b"locked" in values,
             )
         )
 
@@ -233,6 +242,7 @@ def select_action() -> str | None:
                     value="new",
                 ),
                 Choice("Delete an existing worktree", value="delete"),
+                Choice("Clean up worktrees", value="cleanup"),
             ],
             instruction="(↑/↓ to move, enter to select)",
             output=prompt_output,
@@ -559,8 +569,30 @@ def select_worktree(worktrees: list[Worktree]) -> Worktree | None:
 
 
 def worktree_is_dirty(worktree: Path) -> bool:
-    output = run_git("status", "--porcelain", "--ignore-submodules", "-z", cwd=worktree)
-    return bool(output.strip(b"\0"))
+    arguments = [
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+        "-z",
+    ]
+    return bool(run_git(*arguments, cwd=worktree).strip(b"\0"))
+
+
+def worktree_has_ignored_files(worktree: Path) -> bool:
+    # Ignored files do not make a worktree dirty, but removal deletes them.
+    return bool(
+        run_git(
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+            "--no-empty-directory",
+            "-z",
+            cwd=worktree,
+        )
+    )
 
 
 def upstream_parts(repository: Path, branch: str) -> tuple[str, str] | None:
@@ -715,29 +747,209 @@ def delete_worktree(repository: Path) -> Path | None:
     return None
 
 
+def cleanup_skip_reason(worktree: Worktree) -> str | None:
+    if worktree.main or worktree.bare:
+        return "main or bare worktree"
+    if worktree.locked:
+        return "locked"
+    if worktree.branch is None:
+        return "detached HEAD (no local branch to preserve)"
+    if worktree.path.exists() and worktree_is_dirty(worktree.path):
+        return "uncommitted changes or untracked files"
+    return None
+
+
+def cleanup_candidates(
+    repository: Path, worktrees: list[Worktree]
+) -> list[CleanupCandidate]:
+    remotes = decode_line(run_git("remote", cwd=repository)).splitlines()
+    default_refs = {}
+    for remote in remotes:
+        default = remote_default_branch(repository, remote)
+        if default is not None and remote_tracking_ref_exists(repository, remote, default):
+            default_refs[remote] = f"refs/remotes/{remote}/{default}"
+
+    candidates = []
+    for worktree in worktrees:
+        if worktree.main or worktree.bare:
+            continue
+        try:
+            skipped = cleanup_skip_reason(worktree)
+            if skipped is not None:
+                console.print(
+                    f"Skipping {worktree.path}: {skipped}", style="dim", markup=False
+                )
+                continue
+
+            path_exists = worktree.path.exists()
+            reasons = ["clean" if path_exists else "directory missing"]
+            if path_exists and worktree_has_ignored_files(worktree.path):
+                reasons.append("ignored files will also be deleted")
+            assert worktree.branch is not None
+            upstream = upstream_parts(repository, worktree.branch)
+            if upstream is not None:
+                remote, branch = upstream
+                name = f"{remote}/{branch}"
+                if remote_tracking_ref_exists(repository, remote, branch):
+                    ahead = count_commits(
+                        repository, f"refs/remotes/{name}..{worktree.head}"
+                    )
+                    reasons.append(f"{ahead} unpushed commit(s) vs {name}")
+                else:
+                    reasons.append(f"upstream {name} gone (not proof of merge)")
+            else:
+                reasons.append("no remote upstream")
+
+            for remote, ref in default_refs.items():
+                if upstream is not None and remote != upstream[0]:
+                    continue
+                if git_succeeds(
+                    "merge-base", "--is-ancestor", worktree.head, ref, cwd=repository
+                ):
+                    reasons.insert(0, f"merged into {ref.removeprefix('refs/remotes/')}")
+                    break
+            candidates.append(CleanupCandidate(worktree, "; ".join(reasons)))
+        except WorktreeError as error:
+            console.print(
+                f"Skipping {worktree.path}: {error}", style="yellow", markup=False
+            )
+    return candidates
+
+
+def select_cleanup_candidates(
+    candidates: list[CleanupCandidate],
+) -> list[CleanupCandidate] | None:
+    question = questionary.checkbox(
+        "Select worktrees to remove",
+        choices=[
+            Choice(
+                f"{candidate.worktree.path}  [{candidate.worktree.branch}] "
+                f"— {candidate.reason}",
+                value=candidate,
+            )
+            for candidate in candidates
+        ],
+        instruction=(
+            "(↑/↓ to move, space to toggle, enter to delete checked or highlighted, "
+            "Ctrl+C to cancel)"
+        ),
+        output=prompt_output,
+    )
+    selected = ask(question)
+    if selected == []:
+        # Questionary submits [] when no boxes are checked. Enter should then
+        # act on the highlighted row, like the other wt selectors. Cancellation
+        # returns None and must never trigger this fallback.
+        control = next(
+            control
+            for control in question.application.layout.find_all_controls()
+            if isinstance(control, InquirerControl)
+        )
+        return [control.get_pointed_at().value]
+    return selected
+
+
+def cleanup_worktrees(repository: Path) -> Path | None:
+    # Keep commands rooted in the main worktree even if the caller removes the
+    # worktree they are standing in. Never force removal or delete branch refs.
+    main = main_worktree(list_worktrees(repository))
+    repository = main.path
+    current_directory = Path.cwd().resolve()
+    with console.status("Fetching and pruning all remotes…"):
+        run_git("fetch", "--all", "--prune", cwd=repository)
+
+    console.print("\n[bold]Worktree cleanup[/bold]")
+    console.print(
+        "Clean does not mean merged. Local and remote branches will be kept; "
+        "dirty, locked, and detached worktrees are skipped."
+    )
+    console.print(
+        "Ignored files (such as build output) do not block cleanup, but will be "
+        "deleted with selected worktrees. Enter removes checked worktrees, or "
+        "the highlighted worktree if none are checked, without another confirmation. "
+        "Press Ctrl+C to cancel.",
+        style="yellow",
+    )
+    candidates = cleanup_candidates(repository, list_worktrees(repository))
+    if not candidates:
+        console.print("No worktrees eligible for cleanup.")
+        return None
+    selected = select_cleanup_candidates(candidates)
+    if not selected:
+        return None
+
+    for candidate in selected:
+        console.print(f"  {candidate.worktree.path}: {candidate.reason}", markup=False)
+
+    destination = None
+    for candidate in selected:
+        worktree = candidate.worktree
+        try:
+            # Recheck after selection: a branch, lock, or dirty state may have
+            # changed while the user was deciding. Git checks again on removal.
+            fresh = next(
+                (
+                    item
+                    for item in list_worktrees(repository)
+                    if item.path == worktree.path
+                ),
+                None,
+            )
+            if fresh is None or fresh != worktree:
+                console.print(
+                    f"Skipping {worktree.path}: worktree changed; scan again", markup=False
+                )
+                continue
+            skipped = cleanup_skip_reason(fresh)
+            if skipped is not None:
+                console.print(f"Skipping {worktree.path}: {skipped}", markup=False)
+                continue
+            inside = current_directory.is_relative_to(worktree.path.resolve())
+            run_git("worktree", "remove", "--", str(worktree.path), cwd=repository)
+            if inside:
+                destination = main.path
+            console.print(
+                f"Removed worktree {worktree.path} (branches kept)",
+                style="green",
+                markup=False,
+            )
+        except WorktreeError as error:
+            console.print(
+                f"Could not remove {worktree.path}: {error}", style="yellow", markup=False
+            )
+
+    if destination is not None:
+        console.print(f"Moving to the main worktree at {destination}", markup=False)
+    return destination
+
+
 def print_help() -> None:
-    console.print("Usage: wt")
-    console.print("Create, enter, or delete a worktree from an interactive selector.")
+    console.print("Usage: wt [cleanup|prune]", markup=False)
+    console.print("Create, enter, delete, or clean up worktrees interactively.")
+    console.print("cleanup (alias: prune): Enter removes checked or highlighted worktrees.")
+    console.print("No extra confirmation; ignored files are removed, branches are kept.")
 
 
 def main(arguments: list[str]) -> int:
-    if arguments:
-        if arguments in (["-h"], ["--help"]):
-            print_help()
-            return 0
-        console.print("[red]error:[/red]", f"unsupported argument: {arguments[0]}")
+    if arguments in (["-h"], ["--help"]):
+        print_help()
+        return 0
+    if arguments and arguments not in (["cleanup"], ["prune"]):
+        console.print("[red]error:[/red]", f"unsupported arguments: {' '.join(arguments)}")
         print_help()
         return 2
 
     try:
         repository = find_repository()
-        action = select_action()
+        action = "cleanup" if arguments else select_action()
         if action == "existing":
             selected_path = use_remote_branch(repository)
         elif action == "new":
             selected_path = create_new_branch(repository)
         elif action == "delete":
             selected_path = delete_worktree(repository)
+        elif action == "cleanup":
+            selected_path = cleanup_worktrees(repository)
         else:
             selected_path = None
     except WorktreeError as error:
