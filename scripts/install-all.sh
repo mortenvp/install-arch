@@ -17,5 +17,8 @@ log_step "Installing Warp terminal"
 log_step "Installing AUR packages"
 "$SCRIPT_DIR/install-aur-packages.sh" "$SCRIPT_DIR/../packages/aur.packages"
 
+log_step "Installing Shatter Shell from Git"
+"$SCRIPT_DIR/install-shatter-shell.sh"
+
 log_step "Installing upstream tools"
 "$SCRIPT_DIR/install-upstream-tools.sh"

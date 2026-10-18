@@ -149,7 +149,7 @@ This will:
 17. Enable and start `tailscaled.service` with `systemctl` when available.
 18. Set the default shell to fish.
 19. Apply GNOME keybindings, default to 8 workspaces, set dark mode, use a 24-hour clock, and disable idle screen blanking, dimming, and automatic suspend for desktops (if GNOME settings are available).
-20. Enable GNOME extensions for Pop Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
+20. Install Shatter Shell from Git, disable Pop Shell if present, and enable Shatter Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
 21. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
 22. Add GNOME autostart entry for `pear-desktop`.
 23. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
@@ -165,6 +165,7 @@ SKIP_PI_SETTINGS=1 ./install.sh
 SKIP_WARP_SETTINGS=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
+SKIP_SHATTER_SHELL=1 ./install.sh
 SKIP_GNOME_KEYBINDINGS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
@@ -273,6 +274,34 @@ Check only (no installation or initramfs rebuild):
 
 ```bash
 ./scripts/configure-nvidia-display.sh --check
+```
+
+## Shatter Shell (from Git)
+
+The package step runs `scripts/install-shatter-shell.sh` instead of installing Pop Shell from AUR. It clones [adil192/shatter-shell](https://github.com/adil192/shatter-shell) from `master_resolute`, fast-forwards the checkout on reruns, and builds with the project's locked npm dependencies. Missing build tools are installed with pacman. The script refuses modified checkouts and GNOME versions not supported by the checked-out extension's metadata.
+
+Sources are kept in `${XDG_CACHE_HOME:-$HOME/.cache}/install-arch/shatter-shell`; the extension and compiled settings schema are installed under `${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/shatter-shell@adilhanney.com`. No system-wide extension files are overwritten.
+
+Build/install or update just Shatter Shell as your normal user:
+
+```bash
+./scripts/install-shatter-shell.sh
+```
+
+Then log out and back in, and enable/configure it:
+
+```bash
+./scripts/enable-gnome-extensions.sh
+```
+
+The configuration step disables Pop Shell before enabling Shatter Shell and makes workspaces span displays. Existing Pop Shell packages are kept as a fallback, but never enabled by this installer. Pop Shell preferences are not migrated to Shatter Shell. If GNOME cannot see the new extension yet, the installer reports that you need to log out/in and rerun the enable script.
+
+Set `SKIP_SHATTER_SHELL=1` to skip both its installation and configuration, leaving Pop Shell unchanged. `SKIP_GNOME_EXTENSIONS=1` skips extension configuration only; it does not skip building Shatter Shell.
+
+Test without installing packages, accessing the network, or changing GNOME settings:
+
+```bash
+python testing/test-shatter-shell.py
 ```
 
 ## GNOME power defaults

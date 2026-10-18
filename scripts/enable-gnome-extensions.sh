@@ -22,6 +22,7 @@ if command -v gsettings >/dev/null 2>&1; then
   fi
 fi
 
+SHATTER_SHELL_UUID="shatter-shell@adilhanney.com"
 POP_SHELL_UUID="pop-shell@system76.com"
 ARCH_UPDATE_UUID="arch-update@RaphaelRochet"
 GSCONNECT_UUID="gsconnect@andyholmes.github.io"
@@ -30,12 +31,27 @@ mapfile -t installed_extensions < <(gnome-extensions list)
 
 enabled_any=0
 
-if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${POP_SHELL_UUID}$"; then
-  log_step "Enabling Pop Shell (${POP_SHELL_UUID})"
-  gnome-extensions enable "$POP_SHELL_UUID"
-  enabled_any=1
+if [[ "${SKIP_SHATTER_SHELL:-}" == "1" ]]; then
+  log_step "Skipping Shatter Shell configuration (SKIP_SHATTER_SHELL=1)"
+elif printf '%s\n' "${installed_extensions[@]}" | grep -Fxq "$SHATTER_SHELL_UUID" ||
+    [[ -d "${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/${SHATTER_SHELL_UUID}" ||
+       -d "/usr/share/gnome-shell/extensions/${SHATTER_SHELL_UUID}" ]]; then
+  if printf '%s\n' "${installed_extensions[@]}" | grep -Fxq "$POP_SHELL_UUID"; then
+    log_step "Disabling Pop Shell to avoid conflicts with Shatter Shell"
+    gnome-extensions disable "$POP_SHELL_UUID"
+  fi
+  if command -v gsettings >/dev/null 2>&1; then
+    log_step "Configuring workspaces to span displays for Shatter Shell"
+    gsettings set org.gnome.mutter workspaces-only-on-primary false
+  fi
+  log_step "Enabling Shatter Shell (${SHATTER_SHELL_UUID})"
+  if gnome-extensions enable "$SHATTER_SHELL_UUID"; then
+    enabled_any=1
+  else
+    log_step "Shatter Shell could not be enabled in this session; log out/in and run this script again"
+  fi
 else
-  log_step "Pop Shell extension not found; skipping"
+  log_step "Shatter Shell extension not found; leaving Pop Shell unchanged"
 fi
 
 if printf '%s\n' "${installed_extensions[@]}" | grep -q "^${ARCH_UPDATE_UUID}$"; then
