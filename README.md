@@ -131,7 +131,7 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 
 This will:
 1. Remove an existing Lix install if detected.
-2. Install pacman packages from `packages/base.packages`, including Arch's `nix` package.
+2. Install pacman packages from `packages/base.packages`, including Arch's `nix` package, then install Steam from multilib with matching GPU libraries (includes a full system upgrade).
 3. Configure Warp's official pacman repo/signing key and install `warp-terminal`.
 4. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
@@ -159,6 +159,7 @@ Skip optional steps:
 ```bash
 SKIP_LIX_REMOVAL=1 ./install.sh
 SKIP_NIX=1 ./install.sh
+SKIP_STEAM=1 ./install.sh
 SKIP_SHELL=1 ./install.sh
 SKIP_CLAUDE_CODE=1 ./install.sh
 SKIP_PI_SETTINGS=1 ./install.sh
@@ -177,6 +178,34 @@ SKIP_TCPDUMP_SUDO=1 ./install.sh
 SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 SKIP_GDM_MONITORS=1 ./install.sh
 SKIP_HW_CODECS=1 ./install.sh
+```
+
+## Steam (Arch multilib)
+
+Steam is installed by default through `scripts/install-all.sh`. Install just Steam as your normal user:
+
+```bash
+./scripts/install-steam.sh
+```
+
+This enables Arch's `[multilib]` repository if needed, preserving existing settings and saving the original `/etc/pacman.conf` as `/etc/pacman.conf.before-steam` before changing it. It installs `steam` and 64-/32-bit OpenGL and Vulkan libraries for detected Intel, AMD, and NVIDIA GPUs, including hybrid systems. With no supported GPU detected, it uses software Vulkan (limited gaming performance).
+
+The script runs `pacman -Syu --noconfirm --needed`, so **it also performs a full system upgrade** rather than an unsupported partial upgrade. NVIDIA support targets the current official Arch driver; a working kernel/display driver is still required. The full installer handles that separately through `scripts/configure-nvidia-display.sh`. Legacy NVIDIA/AUR driver stacks need matching libraries installed manually instead.
+
+Preview package selection without changing anything:
+
+```bash
+./scripts/install-steam.sh --check
+```
+
+Launch **Steam** from GNOME or run `steam` (not with sudo), then sign in. For Windows games, use Steam's **Settings → Compatibility** to enable Steam Play/Proton as needed. If kernel or GPU drivers were upgraded, reboot before playing.
+
+Set `SKIP_STEAM=1 ./install.sh` to skip Steam and leave multilib unchanged. This also works with `scripts/install-all.sh`.
+
+Test with mocked package commands and temporary configuration files (no installation):
+
+```bash
+python testing/test-steam.py
 ```
 
 ## Warp terminal on Arch (official repo)
@@ -396,6 +425,7 @@ SKIP_GDB_PRETTY_PRINTERS=1 ./install.sh
 
 - Pacman: add to `packages/base.packages`.
 - AUR: add to `packages/aur.packages`.
+- Steam (Arch): managed by `scripts/install-steam.sh` (multilib setup and GPU libraries, not AUR).
 - Warp terminal (Arch): managed by `scripts/install-warp-terminal.sh` (official repo package, not AUR).
 - VS Code extensions: add extension IDs to `packages/vscode.extensions`.
 - Upstream tools: edit `scripts/install-upstream-tools.sh` and per-tool scripts in `scripts/`.
