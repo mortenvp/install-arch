@@ -11,7 +11,7 @@ log_step "Cleaning up legacy npm-global conflicts"
 log_step "Installing base packages"
 "$SCRIPT_DIR/install-packages.sh" "$SCRIPT_DIR/../packages/base.packages"
 
-log_step "Installing Steam"
+log_step "Optional Steam setup"
 "$SCRIPT_DIR/install-steam.sh"
 
 log_step "Installing Warp terminal"

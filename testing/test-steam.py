@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 """Test Steam setup without installing packages or changing host configuration."""
 
+import errno
+import os
 from pathlib import Path
+import pty
+import select
 import shutil
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,12 +96,14 @@ exit "${TEST_PACMAN_STATUS:-0}"
 
     def run_script(self, *arguments, success=True, **overrides):
         self.log.write_text("")
+        overrides.setdefault("INSTALL_STEAM", "1")
         result = subprocess.run(
             [BASH, str(self.directory / "install-steam.sh"), *arguments],
             env=dict(self.env, **overrides),
             input="",
             capture_output=True,
             text=True,
+            start_new_session=True,  # No controlling terminal: must not prompt.
             timeout=10,
         )
         if success:
@@ -103,6 +111,49 @@ exit "${TEST_PACMAN_STATUS:-0}"
         else:
             self.assertNotEqual(result.returncode, 0)
         return result
+
+    def run_prompt(self, answer, *arguments, **overrides):
+        self.log.write_text("")
+        pid, fd = pty.fork()
+        if pid == 0:
+            # Keep a controlling terminal but redirect stdin, like curl | bash.
+            os.execve(BASH, [
+                BASH, "-c", 'exec "$@" </dev/null', "test",
+                BASH, str(self.directory / "install-steam.sh"), *arguments,
+            ], dict(self.env, **overrides))
+
+        output = b""
+        sent = False
+        reaped = False
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if not select.select([fd], [], [], 0.1)[0]:
+                    continue
+                try:
+                    chunk = os.read(fd, 4096)
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+                    break
+                if not chunk:
+                    break
+                output += chunk
+                if not sent and b"Install Steam? [y/N]: " in output:
+                    os.write(fd, answer)
+                    sent = True
+            else:
+                self.fail(f"Prompt timed out: {output!r}")
+
+            _, status = os.waitpid(pid, 0)
+            reaped = True
+            self.assertEqual(status, 0, output)
+            return output
+        finally:
+            if not reaped:
+                os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
+            os.close(fd)
 
     def commands(self):
         return self.log.read_text().splitlines()
@@ -117,6 +168,46 @@ exit "${TEST_PACMAN_STATUS:-0}"
         self.assertFalse(any(line.startswith("sudo ") for line in self.commands()))
         self.assertEqual(self.conf.read_text(), BASE_CONFIG)
         self.assertFalse(self.backup.exists())
+
+    def test_no_terminal_defaults_to_no(self):
+        result = self.run_script(INSTALL_STEAM="")
+        self.assertIn("Skipping Steam", result.stdout)
+        self.assertNotIn("Install Steam?", result.stdout + result.stderr)
+        self.assertEqual(self.commands(), [])
+        self.assert_no_writes()
+
+    def test_prompt_defaults_to_no_and_rejects_other_answers(self):
+        for answer in (b"\n", b"n\n", b"No\n", b"maybe\n", b"\x04"):
+            with self.subTest(answer=answer):
+                output = self.run_prompt(answer)
+                self.assertIn(b"Install Steam? [y/N]: ", output)
+                self.assertIn(b"Skipping Steam", output)
+                self.assertEqual(self.commands(), [])
+                self.assert_no_writes()
+
+    def test_prompt_accepts_only_explicit_yes(self):
+        for answer in (b"y\n", b"Y\n", b"yes\n", b"YES\n", b"Yes\n"):
+            with self.subTest(answer=answer):
+                output = self.run_prompt(answer)
+                self.assertIn(b"Install Steam? [y/N]: ", output)
+                self.assertIn("steam", self.packages())
+
+    def test_install_override_bypasses_prompt(self):
+        output = self.run_prompt(b"", INSTALL_STEAM="1")
+        self.assertNotIn(b"Install Steam?", output)
+        self.assertIn("steam", self.packages())
+
+    def test_skip_override_bypasses_prompt_and_takes_precedence(self):
+        output = self.run_prompt(b"", SKIP_STEAM="1", INSTALL_STEAM="1")
+        self.assertNotIn(b"Install Steam?", output)
+        self.assertEqual(self.commands(), [])
+        self.assert_no_writes()
+
+    def test_check_bypasses_prompt(self):
+        output = self.run_prompt(b"", "--check")
+        self.assertNotIn(b"Install Steam?", output)
+        self.assertIn(b"Check mode enabled", output)
+        self.assert_no_writes()
 
     def test_enables_multilib_preserving_config_and_backup_on_rerun(self):
         self.gpu("0x1002")
@@ -191,7 +282,7 @@ exit "${TEST_PACMAN_STATUS:-0}"
 
     def test_check_is_read_only(self):
         self.gpu("0x1002")
-        result = self.run_script("--check")
+        result = self.run_script("--check", INSTALL_STEAM="")
         self.assertIn("lib32-vulkan-radeon", result.stdout)
         self.assert_no_writes()
 

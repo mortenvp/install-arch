@@ -18,6 +18,24 @@ if [[ "${SKIP_STEAM:-}" == "1" ]]; then
   exit 0
 fi
 
+if [[ "$MODE" == "install" && "${INSTALL_STEAM:-}" != "1" ]]; then
+  answer=''
+  # Read from the controlling terminal so curl | bash works without consuming
+  # script input. Without a terminal (or on EOF), default to not installing.
+  if { exec {tty_fd}<>/dev/tty; } 2>/dev/null; then
+    printf 'Install Steam? [y/N]: ' >&"$tty_fd"
+    IFS= read -r -u "$tty_fd" answer || answer=''
+    exec {tty_fd}>&-
+  fi
+  case "$answer" in
+    [yY]|[yY][eE][sS]) ;;
+    *)
+      log_step "Skipping Steam (not opted in)"
+      exit 0
+      ;;
+  esac
+fi
+
 if ! command -v pacman >/dev/null 2>&1 || ! command -v pacman-conf >/dev/null 2>&1; then
   echo "pacman not found; this script must run on Arch Linux." >&2
   exit 2

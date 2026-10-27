@@ -131,7 +131,7 @@ wget -qO- https://raw.githubusercontent.com/mortenvp/install-arch/main/boot.sh |
 
 This will:
 1. Remove an existing Lix install if detected.
-2. Install pacman packages from `packages/base.packages`, including Arch's `nix` package, then install Steam from multilib with matching GPU libraries (includes a full system upgrade).
+2. Install pacman packages from `packages/base.packages`, including Arch's `nix` package, then offer to install Steam from multilib with matching GPU libraries (default: no; includes a full system upgrade if accepted).
 3. Configure Warp's official pacman repo/signing key and install `warp-terminal`.
 4. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
@@ -182,7 +182,9 @@ SKIP_HW_CODECS=1 ./install.sh
 
 ## Steam (Arch multilib)
 
-Steam is installed by default through `scripts/install-all.sh`. Install just Steam as your normal user:
+Steam is optional: `install.sh` (via `scripts/install-all.sh`) asks `Install Steam? [y/N]:`. Press Enter to skip, or answer `y`/`yes` to install. The prompt also works with `curl | bash`; without a usable terminal, Steam is skipped. Skipping leaves multilib unchanged and does not remove an existing Steam installation.
+
+To run just the Steam setup as your normal user (with the same prompt):
 
 ```bash
 ./scripts/install-steam.sh
@@ -200,7 +202,7 @@ Preview package selection without changing anything:
 
 Launch **Steam** from GNOME or run `steam` (not with sudo), then sign in. For Windows games, use Steam's **Settings → Compatibility** to enable Steam Play/Proton as needed. If kernel or GPU drivers were upgraded, reboot before playing.
 
-Set `SKIP_STEAM=1 ./install.sh` to skip Steam and leave multilib unchanged. This also works with `scripts/install-all.sh`.
+Set `INSTALL_STEAM=1 ./install.sh` to install without prompting, or `SKIP_STEAM=1 ./install.sh` to skip without prompting. Both also work with `scripts/install-all.sh` and `scripts/install-steam.sh`; `SKIP_STEAM=1` takes precedence. `--check` never prompts or installs.
 
 Test with mocked package commands and temporary configuration files (no installation):
 
