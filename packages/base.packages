@@ -43,6 +43,7 @@ tmux
 tealdeer
 
 # Apps
+android-tools
 bitwarden
 clang
 cmake
