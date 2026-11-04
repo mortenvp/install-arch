@@ -136,7 +136,7 @@ This will:
 4. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 6. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
-7. Install upstream tools (`devbox`, `uv`, Claude Code, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
+7. Install upstream tools (`devbox`, `uv`, Claude Code, Herdr, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
 8. Install user commands from `bin/`, apply configs from `config/`, bind Warp voice input to Right Super, and configure Pi to start with GPT-6 Astra at xhigh thinking.
 9. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
 10. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
@@ -162,6 +162,7 @@ SKIP_NIX=1 ./install.sh
 SKIP_STEAM=1 ./install.sh
 SKIP_SHELL=1 ./install.sh
 SKIP_CLAUDE_CODE=1 ./install.sh
+SKIP_HERDR=1 ./install.sh
 SKIP_PI_SETTINGS=1 ./install.sh
 SKIP_WARP_SETTINGS=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
@@ -278,6 +279,26 @@ Skip both Claude Code installation and configuration for a run:
 
 ```bash
 SKIP_CLAUDE_CODE=1 ./install.sh
+```
+
+## Herdr (official installer)
+
+`install.sh` installs [Herdr](https://herdr.dev/) through `scripts/install-upstream-tools.sh` and `scripts/install-herdr.sh`. The script uses the official installers at `https://releases.herdr.dev/core/install.sh` and `https://releases.herdr.dev/app/install.sh`, installing `herdr-core` first, then the desktop app. Downloads complete before execution; upstream verifies release archive checksums.
+
+Run just this step as your normal user:
+
+```bash
+./scripts/install-herdr.sh
+```
+
+The app lives in `$XDG_DATA_HOME/herdr-app` (default `~/.local/share/herdr-app`), with `herdr-app` and `herdr-core` commands in `~/.local/bin` and a GNOME app-launcher entry. Upstream also adds `hc` if that command is not already taken. Existing app/core installations are left alone; reruns install only missing components. Herdr manages subsequent updates itself. No Herdr settings or autostart entries are changed by this repo.
+
+The script installs missing Arch dependencies (`curl`, `tar`, `libxkbcommon-x11`, and `vulkan-icd-loader`) via pacman. A desktop session and a working Vulkan driver are required; it does not select or replace your GPU driver. Launch **Herdr** from GNOME or run `herdr-app`.
+
+Skip installation with `SKIP_HERDR=1 ./install.sh`; the flag also works with `scripts/install-herdr.sh` and `scripts/install-upstream-tools.sh`. Test without network access or installation:
+
+```bash
+python testing/test-herdr.py
 ```
 
 ## Pi coding agent defaults

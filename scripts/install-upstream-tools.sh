@@ -21,6 +21,7 @@ else
   "$SCRIPT_DIR/install-claude-code.sh"
 fi
 
+"$SCRIPT_DIR/install-herdr.sh"
 "$SCRIPT_DIR/install-tailscale.sh"
 "$SCRIPT_DIR/install-pi-dev.sh"
 "$SCRIPT_DIR/install-pi-agent-stuff.sh"
