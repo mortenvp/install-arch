@@ -37,5 +37,5 @@ if [[ -f "$SETTINGS_TARGET" ]] && cmp -s "$settings_tmp" "$SETTINGS_TARGET"; the
   log_step "Pi settings already up to date"
 else
   mv "$settings_tmp" "$SETTINGS_TARGET"
-  log_step "Configured Pi to use openai-codex/gpt-6-astra with xhigh thinking in $SETTINGS_TARGET"
+  log_step "Configured Pi to use openai-codex/gpt-6.1-sol with xhigh thinking in $SETTINGS_TARGET"
 fi
