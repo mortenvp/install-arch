@@ -122,8 +122,22 @@ class ProfileTests(unittest.TestCase):
                     timeout=5,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn(f"['{modifier}f']", result.stdout)
                 self.assertIn(f"overlay-key\n{overlay}\n", result.stdout)
+                media_keys = "org.gnome.settings-daemon.plugins.media-keys"
+                custom_path = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/"
+                files_schema = f"{media_keys}.custom-keybinding:{custom_path}custom2/"
+                self.assertIn(f"set\n{media_keys}\nhome\n[]\n", result.stdout)
+                self.assertNotIn(f"home\n['{modifier}f']", result.stdout)
+                self.assertIn(
+                    f"set\n{media_keys}\ncustom-keybindings\n"
+                    f"['{custom_path}custom0/', '{custom_path}custom1/', '{custom_path}custom2/']\n",
+                    result.stdout,
+                )
+                self.assertIn(
+                    f"set\n{files_schema}\ncommand\nnautilus --new-window\n",
+                    result.stdout,
+                )
+                self.assertIn(f"set\n{files_schema}\nbinding\n{modifier}f\n", result.stdout)
 
 
 class TerminalTests(unittest.TestCase):

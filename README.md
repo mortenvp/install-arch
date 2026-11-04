@@ -35,6 +35,8 @@ This also controls the Home folder shortcut and overview key:
 - `laptop`: home `<Control><Alt>f`, overview `Super`
 - `desktop`: home `<Alt>f`, overview `Super_L` (left Super only)
 
+The Home folder shortcut runs `nautilus --new-window`, opening a separate Files window on every press instead of reusing a window/tab. This replaces GNOME's built-in Home shortcut with a custom launcher. Nautilus has no global setting to disable tabs; explicit tab actions and folder-opening requests from other apps are unchanged.
+
 The selected profile also controls [GNOME power defaults](#gnome-power-defaults): desktops stay awake with no idle screen blanking or dimming; laptop power settings are left unchanged.
 
 To choose and apply just the keybindings again:

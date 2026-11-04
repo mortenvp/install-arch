@@ -31,6 +31,7 @@ log_step "GNOME keybindings profile: $KEYBINDINGS_PROFILE (modifier: $KEY_MODIFI
 
 CUSTOM_TERMINAL_PATH='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/'
 CUSTOM_SCREENSHOT_PATH='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/'
+CUSTOM_FILES_PATH='/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/'
 
 BIND_WWW_PRIMARY="${KEY_MODIFIER}w"
 BIND_WWW_SECONDARY="${KEY_MODIFIER}m"
@@ -44,7 +45,8 @@ BIND_CLOSE_WINDOW='<Alt>F4'
 # Browser launcher shortcuts
 gsettings set org.gnome.settings-daemon.plugins.media-keys www "['$BIND_WWW_PRIMARY', '$BIND_WWW_SECONDARY']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys email "[]"
-gsettings set org.gnome.settings-daemon.plugins.media-keys home "['$BIND_HOME']"
+# Use a custom Files launcher below to force a new window instead of a tab.
+gsettings set org.gnome.settings-daemon.plugins.media-keys home "[]"
 
 # Workspace navigation
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-left "['$BIND_WORKSPACE_LEFT']"
@@ -54,8 +56,8 @@ gsettings set org.gnome.desktop.wm.keybindings close "['$BIND_CLOSE_WINDOW']"
 # Overview overlay key
 gsettings set org.gnome.mutter overlay-key "$OVERLAY_KEY"
 
-# Terminal and screenshot launchers
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_TERMINAL_PATH', '$CUSTOM_SCREENSHOT_PATH']"
+# Terminal, screenshot, and Files launchers
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_TERMINAL_PATH', '$CUSTOM_SCREENSHOT_PATH', '$CUSTOM_FILES_PATH']"
 
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_TERMINAL_PATH" name 'Warp Terminal'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_TERMINAL_PATH" command 'warp-terminal'
@@ -64,3 +66,7 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$C
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" name 'Flameshot Capture'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" command 'xdotool exec flameshot gui'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_SCREENSHOT_PATH" binding "$BIND_SCREENSHOT"
+
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_FILES_PATH" name 'Files (New Window)'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_FILES_PATH" command 'nautilus --new-window'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$CUSTOM_FILES_PATH" binding "$BIND_HOME"
