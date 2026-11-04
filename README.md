@@ -232,6 +232,26 @@ The config step updates only `agents.voice.voice_input_toggle_key` in `~/.config
 
 Opt out for a run with `SKIP_WARP_SETTINGS=1 ./install.sh`.
 
+## Hunk terminal diff viewer (AUR)
+
+[Hunk](https://www.hunk.dev/) is installed from the community-maintained `hunk-bin` AUR package via `packages/aur.packages`. It uses upstream's prebuilt binaries, with updates managed by `yay` rather than `hunk update`.
+
+To install only Hunk as your normal user (requires `yay`):
+
+```bash
+yay -S --needed hunk-bin
+```
+
+From a Git repository:
+
+```bash
+hunk diff          # review working-tree changes, including untracked files
+hunk diff --watch  # refresh as files change
+hunk show          # review the latest commit
+```
+
+This repo does not change your Git pager or difftool settings.
+
 ## Claude Code (official installer)
 
 `install.sh` runs `scripts/install-claude-code.sh`, which uses the official native installer at `https://claude.ai/install.sh` (no npm or AUR package). It installs the `claude` command into `~/.local/bin`, already included in this repo's Fish `PATH`, and skips installation when Claude Code is already present.
