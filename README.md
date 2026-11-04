@@ -498,7 +498,7 @@ Configure VS Code keybindings only:
 
 - Fish config: `config/fish/config.fish` (copied to `~/.config/fish/config.fish`) and adds `~/.local/bin` to `PATH`.
 - Fish functions: `config/fish/functions/` (copied to `~/.config/fish/functions/`), including the thin `wt` and `ci-merge` shell wrappers.
-- User commands: `bin/` (installed executable into `~/.local/bin/`), including the Python-powered `wt-ui` worktree selector and `ci-merge-ui` pull-request merger.
+- User commands: `bin/` (installed executable into `~/.local/bin/`), including the Python-powered `wt-ui` worktree selector and `ci-merge-agent` pull-request merger. `ci-merge` is the human-facing wrapper; `ci-merge-agent` is the standalone JSON-first command for agents. Both work from any shell.
 - Git config: `config/git/config` (copied to `~/.config/git/config`). Rewrites GitHub HTTPS URLs to SSH only for `mortenvp/` and `steinwurf/`; other owners are unchanged. Requires working GitHub SSH authentication.
 - VS Code settings: `config/Code/User/settings.json` merged into `~/.config/Code/User/settings.json` (adds missing keys; prompts on conflicts when interactive; non-interactive runs overwrite conflicting keys with repo defaults).
 - VS Code keybindings: `scripts/configure-vscode-keybindings.sh` ensures `Alt+Q` is bound to Rewrap Revived (`rewrap.rewrapComment`) and `Ctrl+Shift+S` is bound to Save All (`workbench.action.files.saveAll`) in `~/.config/Code/User/keybindings.json`.
@@ -555,7 +555,84 @@ ci-merge 42
 ci-merge https://github.com/owner/repository/pull/42
 ```
 
-`ci-merge` requires authenticated `gh`, an open non-draft pull request, a local branch and HEAD matching the pushed PR head, at least one CI check, and squash merging support. It shows the PR and checks, asks for confirmation with **No** as the safe default, waits for pending checks, and revalidates the local state and exact PR head SHA before running a guarded squash merge. Failed checks, local changes, unpushed commits, review blockers, or PR changes stop the merge.
+`ci-merge` requires authenticated `gh`, an open non-draft pull request, a local branch and HEAD matching the pushed PR head, at least one CI check before merging, and squash merging support. It shows the PR and checks, asks for confirmation with **No** as the safe default, waits for pending checks, and revalidates the local state and exact PR head SHA before running a guarded squash merge. If GitHub has not reported any checks yet, confirming starts a scheduling grace period: it polls every 10 seconds for up to 120 seconds for checks to appear, then waits normally for them to finish. If no checks appear, it stops without merging. Checks disappearing after they have been reported, failed checks, local changes, unpushed commits, review blockers, or PR changes also stop the merge.
+
+### Agent usage
+
+Agents should call `ci-merge-agent` directly from any shell, from the clean, fully pushed PR branch. No Fish function, terminal interaction, or agent-specific plugin is needed. It requires `uv`, Git, and authenticated `gh`, just like the interactive command.
+
+```bash
+ci-merge-agent 42 --yes --timeout 900
+```
+
+- `--yes` explicitly authorizes a squash merge without prompting. It **only bypasses confirmation**, not CI, review, local-state, or SHA checks. Without it, merge mode fails before inspecting a PR or attempting a merge; local skill refresh can still run.
+- JSON output is automatic: stdout contains one result object; progress and skill-update messages go to stderr, without spinners or live tables. `ci-merge --yes --json` uses the same interface, including automatic skill refresh. `ci-merge-agent --help` returns help in a JSON result without requiring `--yes`.
+- `--timeout SECONDS` is a positive integer, default **900 seconds**, for CI waiting and final revalidation after confirmation/authorization. The initial no-checks grace period is still capped at 120 seconds. In-flight Git/GitHub calls retain their individual 30-second timeouts, so this is not a hard wall-clock limit on the whole process. The deadline is checked again before submitting a merge; merge submission and verification have separate command timeouts.
+- The PR number can be replaced by a URL or omitted to infer the current branch's PR. An explicit target is recommended for agents.
+
+The interactive `ci-merge` command also accepts `--yes`, `--json`, and `--timeout`. Without `--yes`, it requires a terminal and keeps its confirmation prompt with **No** as the default. All entry points now use the 900-second default waiting limit; increase it for slower CI.
+
+JSON fields are `status`, `exit_code`, `message`, `pr_number`, `pr_url`, `head_sha`, `merge_commit`, and `merge_attempted`. PR details and the merge commit are `null` when unavailable. Status is `merged`, `error`, `timeout`, `cancelled`, `help`, or `skills_installed`. Agents should treat only `status: "merged"` as confirmation of a successful merge—not merely exit code 0, which also covers help and skill installation.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Verified merge, help, or successful skill installation |
+| `1` | Safety check, Git/GitHub, or explicit skill-installation failure |
+| `2` | Invalid arguments or missing noninteractive authorization |
+| `3` | Interactive confirmation declined or input closed |
+| `124` | CI discovery/waiting deadline expired; no merge submitted |
+| `130` | Interrupted with Ctrl+C |
+
+If a non-success result has `merge_attempted: true`, the remote outcome may be uncertain: inspect the PR with `gh pr view` before retrying. Also verify the remote state if the process is killed or produces no complete result. Never respond to a blocked merge by falling back to an unguarded or administrative merge.
+
+Suggested instruction for an agent:
+
+> When I authorize merging, use `ci-merge-agent <PR-number-or-URL> --yes --timeout 900` from the clean, pushed PR branch. Parse its stdout as JSON. Report blockers rather than bypassing them, and verify the remote state before retrying an uncertain merge outcome.
+
+To update these commands and their Fish wrapper from this checkout (without applying unrelated configs):
+
+```bash
+install -Dm755 bin/ci-merge-agent "$HOME/.local/bin/ci-merge-agent"
+install -Dm755 bin/ci-merge "$HOME/.local/bin/ci-merge"
+install -Dm644 config/fish/functions/ci-merge.fish "$HOME/.config/fish/functions/ci-merge.fish"
+"$HOME/.local/bin/ci-merge-agent" --install-skills
+```
+
+Ensure `~/.local/bin` is on the agent's `PATH`, or call `~/.local/bin/ci-merge-agent` explicitly. Start a new Fish session after updating its wrapper. The normal `scripts/apply-config.sh` flow installs both commands and the Fish wrapper too.
+
+### Automatically maintained agent skills
+
+On each successfully parsed agent-mode invocation (including `--help` and a merge request missing `--yes`), the tool compares its bundled skill with these personal skill files and installs or refreshes them:
+
+- Claude Code: `~/.claude/skills/ci-merge-agent/SKILL.md`
+- Pi: `~/.pi/agent/skills/ci-merge-agent/SKILL.md`
+
+`CLAUDE_CONFIG_DIR` and `PI_CODING_AGENT_DIR` override the respective config roots; use the same environment as the agent session. The skill teaches when to use the command, prerequisites, explicit merge authorization, JSON results, timeouts, and safe handling of uncertain outcomes. It grants no tool permissions and does not change agent settings.
+
+Bootstrap or refresh the skills without GitHub access, a Git repository, or any merge:
+
+```bash
+ci-merge-agent --install-skills
+```
+
+This returns `status: "skills_installed"` only when both destinations are up to date. It cannot be combined with a PR target or `--yes`.
+
+The skill is bundled in `bin/ci-merge-agent`, so updating the installed commands also updates the available instructions. Content comparison detects changes without a version bump or network request. Identical files are left untouched; changed files are replaced atomically. Only files with this tool's managed marker are replaced. Unmanaged same-name skills, symlinked skill files/directories, and unrelated skills are preserved. Edits to a managed copy are overwritten on the next refresh; keep personal additions in a separate skill.
+
+An automatic refresh failure warns on stderr without preventing an otherwise authorized merge. Explicit `--install-skills` returns exit 1 if either destination cannot be updated; the other destination is still attempted. Set `SKIP_CI_MERGE_SKILLS=1` to disable automatic refresh (for example, in a read-only or ephemeral home). Explicit `--install-skills` still runs when that variable is set. The human-facing command does not automatically install skills unless used in JSON mode.
+
+After first installation or an update:
+
+- **Pi:** run `/reload` or start a new session; invoke explicitly with `/skill:ci-merge-agent`.
+- **Claude Code:** skills normally refresh automatically; use `/reload-skills` if the directory is newly created, or restart the session. Invoke explicitly with `/ci-merge-agent`.
+
+Sources: [Pi skills](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md) and [Claude Code skills](https://code.claude.com/docs/en/skills).
+
+Test CI scheduling, agent output, skill synchronization in disposable homes, and merge safeguards with mocked GitHub/Git calls (no real merges):
+
+```bash
+uv run --script testing/test-ci-merge-agent.py
+```
 
 ## Notes
 

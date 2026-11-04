@@ -9,11 +9,14 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
@@ -35,6 +38,10 @@ PR_FIELDS = (
 )
 CHECK_FIELDS = "name,workflow,state,bucket,link"
 POLL_INTERVAL_SECONDS = 10
+CHECK_DISCOVERY_TIMEOUT_SECONDS = 120
+DEFAULT_WAIT_TIMEOUT_SECONDS = 900
+SKILL_NAME = "ci-merge-agent"
+SKILL_MANAGED_MARKER = "<!-- Managed by install-arch/ci-merge-agent. -->"
 
 
 class MergeError(Exception):
@@ -43,6 +50,15 @@ class MergeError(Exception):
 
 class UsageError(MergeError):
     """Invalid command-line usage."""
+
+
+class WaitTimeout(MergeError):
+    """CI did not become ready within the allowed waiting period."""
+
+
+class ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise UsageError(message)
 
 
 @dataclass(frozen=True)
@@ -380,8 +396,6 @@ def inspect_pull_request(repository: Path, target: str | None) -> Inspection:
 
     checks = get_checks(repository, pull_request)
     status, affected = evaluate_checks(checks)
-    if status == "none":
-        fail(f"PR #{pull_request.number} has no CI checks")
     if status == "blocked":
         names = ", ".join(check.name for check in affected)
         fail(f"CI already has blocking checks: {names}")
@@ -419,6 +433,15 @@ def checks_table(checks: list[Check], *, next_poll: int | None = None) -> Table:
             Text(check.name),
             Text(check.workflow or "—", style="dim"),
             Text(check.state, style=style),
+        )
+
+    if not checks:
+        table.add_row(
+            "…",
+            "Waiting for GitHub to report CI checks",
+            "—",
+            "Not reported yet",
+            style="cyan",
         )
 
     if next_poll is not None:
@@ -464,41 +487,72 @@ def confirm_merge(inspection: Inspection) -> bool:
             default=False,
             output=prompt_output,
         ).unsafe_ask()
-    except (EOFError, KeyboardInterrupt):
-        console.print("\nCancelled", style="dim")
+    except EOFError:
         return False
     return bool(answer)
 
 
-def monitor_until_ready(repository: Path, inspection: Inspection) -> None:
+def check_wait_deadline(deadline: float) -> None:
+    if time.monotonic() >= deadline:
+        raise WaitTimeout("CI wait timeout expired; the pull request was not merged")
+
+
+def monitor_until_ready(
+    repository: Path,
+    inspection: Inspection,
+    *,
+    deadline: float,
+    interactive: bool,
+) -> None:
     expected = inspection.pull_request
     checks = inspection.checks
+    checks_reported = bool(checks)
+    discovery_deadline = time.monotonic() + CHECK_DISCOVERY_TIMEOUT_SECONDS
 
-    with Live(
-        checks_table(checks, next_poll=0),
-        console=console,
-        refresh_per_second=4,
-        transient=True,
-    ) as live:
+    display = (
+        Live(
+            checks_table(checks, next_poll=0),
+            console=console,
+            refresh_per_second=4,
+            transient=True,
+        )
+        if interactive
+        else nullcontext()
+    )
+    with display as live:
         while True:
+            check_wait_deadline(deadline)
             current = get_pull_request(repository, expected.url)
             validate_identity(current, expected)
             validate_local_state(get_local_state(repository), expected)
             checks = get_checks(repository, expected)
+            check_wait_deadline(deadline)
             status, affected = evaluate_checks(checks)
 
             if status == "none":
-                fail("CI checks disappeared while waiting")
+                if checks_reported:
+                    fail("CI checks disappeared while waiting")
+                if time.monotonic() >= discovery_deadline:
+                    raise WaitTimeout(
+                        "no CI checks were reported within "
+                        f"{CHECK_DISCOVERY_TIMEOUT_SECONDS}s; "
+                        "the pull request was not merged"
+                    )
+            else:
+                checks_reported = True
             if status == "blocked":
                 names = ", ".join(check.name for check in affected)
                 fail(f"CI has blocking checks: {names}")
             if status == "ready":
-                live.update(checks_table(checks))
+                if live is not None:
+                    live.update(checks_table(checks))
                 return
 
             for remaining in range(POLL_INTERVAL_SECONDS, 0, -1):
-                live.update(checks_table(checks, next_poll=remaining))
-                time.sleep(1)
+                check_wait_deadline(deadline)
+                if live is not None:
+                    live.update(checks_table(checks, next_poll=remaining))
+                time.sleep(min(1, max(0, deadline - time.monotonic())))
 
 
 def revalidate_before_merge(repository: Path, inspection: Inspection) -> None:
@@ -556,57 +610,327 @@ def merge_pull_request(repository: Path, inspection: Inspection) -> str:
     return ""
 
 
-def print_help() -> None:
-    console.print("Usage: ci-merge [PR-number-or-URL]")
-    console.print("Wait for required CI checks and safely squash-merge a pull request.")
+def agent_skill_content() -> str:
+    """Keep the portable skill bundled with the executable it describes."""
+    return f"""---
+name: {SKILL_NAME}
+description: Safely squash-merge GitHub pull requests with ci-merge-agent after CI succeeds. Use when asked to merge a PR, wait for CI before merging, or explain merge blockers.
+---
+{SKILL_MANAGED_MARKER}
+
+# CI merge agent
+
+Use `ci-merge-agent` instead of driving the interactive `ci-merge` command.
+Loading this skill is NOT authorization to merge. Only pass `--yes` after the
+user authorizes merging the intended PR. This is a merge tool, not a dry run.
+For inspection only, use read-only `gh pr view` and `gh pr checks` commands.
+
+## Before running
+
+- Work from the PR's local branch with a clean working tree and all commits
+  pushed. Local branch and HEAD must match the GitHub PR head.
+- Require `uv`, Git, authenticated `gh`, and `ci-merge-agent` on PATH. If the
+  command is not on PATH, try `~/.local/bin/ci-merge-agent`. If unavailable, ask
+  the user to install it; do not substitute an unguarded merge command.
+- The PR must be open and non-draft, with squash merging enabled and no review
+  blockers. At least one check must be reported before a merge is allowed.
+
+## Authorized merge
+
+```bash
+ci-merge-agent 42 --yes --timeout {DEFAULT_WAIT_TIMEOUT_SECONDS}
+```
+
+Replace `42` with the intended PR number or URL. Prefer an explicit target;
+omitting it infers the current branch's PR. `--yes` bypasses only the prompt,
+never safety checks. Never add administrative overrides or bypass failed checks.
+
+Stdout is one JSON result; progress and skill-update warnings go to stderr.
+Capture the streams separately and retain the process exit code. Set the shell
+tool's execution limit above the CI timeout to leave room for GitHub calls.
+`--timeout` is a positive number of seconds (default {DEFAULT_WAIT_TIMEOUT_SECONDS})
+for CI waiting and final revalidation, not a hard whole-process deadline.
+Individual Git/GitHub calls have 30-second timeouts. Initial missing checks get
+up to {CHECK_DISCOVERY_TIMEOUT_SECONDS}s to appear, polled every {POLL_INTERVAL_SECONDS}s.
+New checks are included while polling, but there is no extra settling window
+once all reported checks pass or are skipped.
+
+## Interpret the result
+
+JSON fields: `status`, `exit_code`, `message`, `pr_number`, `pr_url`, `head_sha`,
+`merge_commit`, and `merge_attempted`. Unavailable details are `null`.
+
+- Only `status: "merged"` confirms a verified merge. Report the PR URL and commit
+  when available. Exit 0 also covers help and skill installation, not just merges.
+- Exit 1: safety check, Git/GitHub, or explicit skill-installation failure.
+- Exit 2: invalid arguments or missing `--yes`; exit 3: confirmation declined.
+- Exit 124 / `timeout`: no merge submitted; report the timeout rather than bypass it.
+- Exit 130 / `cancelled`: interrupted; do not assume the remote PR is unchanged.
+- On any non-success with `merge_attempted: true`, or if the process is killed or
+  returns no complete JSON, verify remote state before retrying:
+
+```bash
+gh pr view <PR-number-or-URL> --json state,url,headRefOid,mergeCommit
+```
+
+Report blockers and let the user decide how to resolve them. Never fall back to
+`gh pr merge --admin`, force pushes, or weakening branch protection.
+
+## Help and skill maintenance
+
+`ci-merge-agent --help` returns JSON help without GitHub access or a merge.
+`ci-merge-agent --install-skills` installs/refreshes the Claude Code and Pi skills
+without requiring a repository, GitHub authentication, or `--yes`.
+Normal agent runs also refresh these managed skills from the installed tool.
+`SKIP_CI_MERGE_SKILLS=1` disables automatic refresh; explicit `--install-skills`
+still works. Custom roots use `CLAUDE_CONFIG_DIR` and `PI_CODING_AGENT_DIR`.
+Do not edit this managed file; keep personal instructions in a separate skill.
+After changes, use `/reload` in Pi. In Claude Code use `/reload-skills` if needed,
+or restart the session. No permission settings are changed by this skill.
+"""
+
+
+def agent_skill_paths() -> list[Path]:
+    home = Path.home()
+    roots = [
+        Path(os.environ.get("CLAUDE_CONFIG_DIR") or home / ".claude").expanduser(),
+        Path(os.environ.get("PI_CODING_AGENT_DIR") or home / ".pi/agent").expanduser(),
+    ]
+    return [root / "skills" / SKILL_NAME / "SKILL.md" for root in roots]
+
+
+def write_managed_skill(path: Path, content: bytes) -> bool:
+    """Replace only our own skill, atomically, and leave identical files alone."""
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError("refusing to replace a symlinked skill file or directory")
+    if path.exists():
+        if not path.is_file():
+            raise ValueError("skill path is not a regular file")
+        current = path.read_bytes()
+        if current == content:
+            return False
+        if SKILL_MANAGED_MARKER.encode() not in current.splitlines():
+            raise ValueError(
+                "existing skill is not managed by this tool; move it aside first"
+            )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=".SKILL-", suffix=".tmp", delete=False
+        ) as output:
+            temporary = Path(output.name)
+            output.write(content)
+        temporary.chmod(0o644)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return True
+
+
+def sync_agent_skills() -> list[str]:
+    """Best-effort sync for normal runs; return failures for --install-skills."""
+    errors = []
+    content = agent_skill_content().encode()
+    for path in agent_skill_paths():
+        try:
+            if write_managed_skill(path, content):
+                console.print(Text(f"Updated CI merge skill: {path}"), style="dim")
+        except (OSError, ValueError) as error:
+            message = f"could not update skill {path}: {error}"
+            errors.append(message)
+            console.print(Text(f"Warning: {message}"), style="yellow")
+    return errors
+
+
+def positive_seconds(value: str) -> int:
+    try:
+        seconds = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("timeout must be a positive integer") from None
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError("timeout must be a positive integer")
+    return seconds
+
+
+def argument_parser(*, json_output: bool = True) -> ArgumentParser:
+    parser = ArgumentParser(
+        prog="ci-merge-agent" if json_output else "ci-merge",
+        add_help=False,
+        allow_abbrev=False,
+        description="Wait for CI checks and safely squash-merge a pull request.",
+        epilog=(
+            f"Allow up to {CHECK_DISCOVERY_TIMEOUT_SECONDS}s for initial checks "
+            "to appear. --yes bypasses confirmation only, never safety checks. "
+            "JSON mode also refreshes the personal Claude Code and Pi skills."
+        ),
+    )
+    parser.add_argument("target", nargs="?", metavar="PR-number-or-URL")
+    parser.add_argument("-h", "--help", action="store_true", help="show this help")
+    parser.add_argument(
+        "-y", "--yes", action="store_true", help="authorize merging without a prompt"
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="use human-facing prompts/output (used by ci-merge); --json overrides this",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit one JSON result on stdout, without terminal UI (--yes required to merge)",
+    )
+    parser.add_argument(
+        "--install-skills",
+        action="store_true",
+        help="install/update Claude Code and Pi skills without inspecting or merging a PR",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=positive_seconds,
+        default=DEFAULT_WAIT_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+        help=f"CI waiting limit after confirmation (default: {DEFAULT_WAIT_TIMEOUT_SECONDS}s)",
+    )
+    return parser
 
 
 def main(arguments: list[str]) -> int:
-    if arguments in (["-h"], ["--help"]):
-        print_help()
-        return 0
+    # The agent is JSON-first; ci-merge explicitly selects the interactive UI.
+    # Recognize the mode even on usage errors, but ignore values after --.
+    option_arguments = (
+        arguments[: arguments.index("--")] if "--" in arguments else arguments
+    )
+    json_output = (
+        "--interactive" not in option_arguments or "--json" in option_arguments
+    )
+    inspection: Inspection | None = None
+    merge_attempted = False
+
+    def finish(
+        status: str, message: str, exit_code: int, merge_commit: str | None = None
+    ) -> int:
+        pull_request = inspection.pull_request if inspection is not None else None
+        if json_output:
+            print(
+                json.dumps(
+                    {
+                        "status": status,
+                        "exit_code": exit_code,
+                        "message": message,
+                        "pr_number": pull_request.number if pull_request else None,
+                        "pr_url": pull_request.url if pull_request else None,
+                        "head_sha": pull_request.head_sha if pull_request else None,
+                        "merge_commit": merge_commit or None,
+                        "merge_attempted": merge_attempted,
+                    }
+                )
+            )
+        else:
+            style = "green" if status == "merged" else "red" if exit_code else None
+            console.print(Text(message), style=style)
+            if status == "merged" and pull_request is not None:
+                console.print(Text(pull_request.url, style="blue underline"))
+                if merge_commit:
+                    console.print(f"Merge commit: {merge_commit}", style="dim")
+        return exit_code
 
     try:
-        target = validate_target(arguments)
+        parser = argument_parser(json_output=json_output)
+        options = parser.parse_args(arguments)
+        if options.install_skills and (options.target is not None or options.yes):
+            raise UsageError(
+                "--install-skills cannot be combined with a PR target or --yes"
+            )
+        skill_errors = []
+        if options.install_skills or (
+            json_output and os.environ.get("SKIP_CI_MERGE_SKILLS") != "1"
+        ):
+            skill_errors = sync_agent_skills()
+        if options.install_skills:
+            if skill_errors:
+                return finish(
+                    "error",
+                    "Skill installation incomplete: " + "; ".join(skill_errors),
+                    1,
+                )
+            return finish(
+                "skills_installed", "Claude Code and Pi skills are up to date", 0
+            )
+        if options.help:
+            return finish("help", parser.format_help(), 0)
+        target = validate_target([options.target] if options.target is not None else [])
+        has_terminal = sys.stdin.isatty() and sys.stderr.isatty()
+        if not options.yes and (json_output or not has_terminal):
+            raise UsageError(
+                "noninteractive use requires --yes to explicitly authorize merging"
+            )
+        interactive = has_terminal and not json_output
         repository = find_repository()
-        with console.status("Checking GitHub authentication…"):
+        with (
+            console.status("Checking GitHub authentication…")
+            if interactive
+            else nullcontext()
+        ):
             require_gh_auth(repository)
-        with console.status("Inspecting pull request and local branch…"):
+        with (
+            console.status("Inspecting pull request and local branch…")
+            if interactive
+            else nullcontext()
+        ):
             inspection = inspect_pull_request(repository, target)
 
-        if not confirm_merge(inspection):
-            console.print("Pull request was not merged", style="dim")
-            return 0
+        if not options.yes and not confirm_merge(inspection):
+            return finish("cancelled", "Pull request was not merged", 3)
 
+        deadline = time.monotonic() + options.timeout
         console.print(
             f"Waiting for CI on PR #{inspection.pull_request.number}…",
             style="cyan",
         )
-        monitor_until_ready(repository, inspection)
+        if not inspection.checks:
+            console.print(
+                "No checks reported yet; allowing up to "
+                f"{min(CHECK_DISCOVERY_TIMEOUT_SECONDS, options.timeout)}s "
+                "for GitHub to schedule CI.",
+                style="cyan",
+            )
+        monitor_until_ready(
+            repository, inspection, deadline=deadline, interactive=interactive
+        )
 
-        with console.status("Revalidating and squash-merging…"):
+        with (
+            console.status("Revalidating and squash-merging…")
+            if interactive
+            else nullcontext()
+        ):
+            check_wait_deadline(deadline)
             revalidate_before_merge(repository, inspection)
+            check_wait_deadline(deadline)
+            merge_attempted = True
             merge_commit = merge_pull_request(repository, inspection)
 
-        console.print(
-            f"[bold green]✓ PR #{inspection.pull_request.number} was squash-merged[/bold green]"
+        return finish(
+            "merged",
+            f"PR #{inspection.pull_request.number} was squash-merged",
+            0,
+            merge_commit,
         )
-        console.print(Text(inspection.pull_request.url, style="blue underline"))
-        if merge_commit:
-            console.print(f"Merge commit: {merge_commit}", style="dim")
-        return 0
     except KeyboardInterrupt:
-        console.print(
-            "\nCancelled; verify the pull request state before retrying",
-            style="yellow",
+        return finish(
+            "cancelled", "Cancelled; verify the pull request state before retrying", 130
         )
-        return 130
     except UsageError as error:
-        console.print("[bold red]Error:[/bold red]", Text(str(error)))
-        return 2
+        return finish("error", str(error), 2)
+    except WaitTimeout as error:
+        return finish("timeout", str(error), 124)
     except MergeError as error:
-        console.print("[bold red]Error:[/bold red]", Text(str(error)))
-        return 1
+        message = str(error)
+        if merge_attempted:
+            message += "; verify the pull request state before retrying"
+        return finish("error", message, 1)
 
 
 if __name__ == "__main__":
