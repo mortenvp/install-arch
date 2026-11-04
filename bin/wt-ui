@@ -475,6 +475,59 @@ def remote_branch_exists(repository: Path, remote: str, branch: str) -> bool:
     fail(detail or f"could not query remote {remote}")
 
 
+def stash_worktree_changes(repository: Path, branch: str) -> str:
+    previous = git_process("rev-parse", "--verify", "refs/stash", cwd=repository)
+    result = git_process(
+        "stash",
+        "push",
+        "--include-untracked",
+        "--message",
+        f"wt: changes for {branch}",
+        cwd=repository,
+    )
+    saved = git_process("rev-parse", "--verify", "refs/stash", cwd=repository)
+    stash = (
+        decode_line(saved.stdout)
+        if saved.returncode == 0 and saved.stdout != previous.stdout
+        else None
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip() or "git stash failed"
+        if stash is not None:
+            detail += (
+                f"\nChanges saved in stash {stash}. Recover in {repository} with: "
+                f"git stash apply --index {stash}"
+            )
+        fail(detail)
+    if stash is None:
+        fail(
+            "could not stash changes; changes inside submodules must be handled manually"
+        )
+    console.print(
+        f"Temporarily saved changes in stash {stash}", style="dim", markup=False
+    )
+    return stash
+
+
+def apply_worktree_stash(worktree: Path, stash: str) -> None:
+    # Apply the exact stash, preserving the index. Never pop somebody else's stash.
+    run_git("stash", "apply", "--index", stash, cwd=worktree)
+    # Failure to tidy up must not be mistaken for a failed apply (or retried).
+    result = git_process("stash", "list", "--format=%gd %H", cwd=worktree)
+    if result.returncode == 0:
+        for entry in decode_line(result.stdout).splitlines():
+            reference, _, commit = entry.partition(" ")
+            if commit == stash:
+                result = git_process("stash", "drop", reference, cwd=worktree)
+                break
+    if result.returncode != 0:
+        console.print(
+            f"Changes applied, but temporary stash {stash} could not be dropped.",
+            style="yellow",
+            markup=False,
+        )
+
+
 def create_new_branch(repository: Path) -> Path | None:
     base_branch = current_branch(repository)
     remote = branch_remote(repository, base_branch)
@@ -494,11 +547,15 @@ def create_new_branch(repository: Path) -> Path | None:
     console.print(f"New branch:  [bold]{branch}[/bold]")
     console.print(f"Remote:      [bold]{remote}[/bold]")
     console.print(f"Worktree:    [bold]{target}[/bold]")
+    carry_changes = worktree_is_dirty(repository)
+    if carry_changes and not confirm(
+        "Move uncommitted changes (including untracked files) to the new worktree?",
+        default=False,
+    ):
+        console.print("Cancelled; uncommitted changes left in the current worktree.")
+        return None
     if not confirm("Pull the base branch, create, and publish this branch?"):
         return None
-
-    with console.status(f"Updating {base_branch}…"):
-        run_git("pull", "--ff-only", cwd=repository)
 
     if remote_branch_exists(repository, remote, branch):
         fail(
@@ -506,16 +563,51 @@ def create_new_branch(repository: Path) -> Path | None:
             "choose the existing remote branch instead"
         )
 
-    run_git(
-        "worktree",
-        "add",
-        "-b",
-        branch,
-        "--",
-        str(target),
-        base_branch,
-        cwd=repository,
-    )
+    stash = None
+    try:
+        if carry_changes:
+            stash = stash_worktree_changes(repository, branch)
+            if worktree_is_dirty(repository):
+                fail(
+                    "the current worktree is still dirty after stashing; "
+                    "changes inside submodules must be handled manually"
+                )
+
+        with console.status(f"Updating {base_branch}…"):
+            run_git("pull", "--ff-only", cwd=repository)
+
+        run_git(
+            "worktree",
+            "add",
+            "-b",
+            branch,
+            "--",
+            str(target),
+            base_branch,
+            cwd=repository,
+        )
+    except (WorktreeError, KeyboardInterrupt) as error:
+        if stash is not None:
+            try:
+                apply_worktree_stash(repository, stash)
+            except WorktreeError as restore_error:
+                fail(
+                    f"{error}\nCould not fully restore changes in {repository}: "
+                    f"{restore_error}\nStash {stash} kept for recovery. "
+                    f"Resolve any conflicts there; to retry manually, use: "
+                    f"git stash apply --index {stash}"
+                )
+        raise
+
+    if stash is not None:
+        try:
+            apply_worktree_stash(target, stash)
+        except WorktreeError as error:
+            fail(
+                f"worktree created at {target}, but carrying over changes failed: "
+                f"{error}\nStash {stash} kept for recovery. Resolve any conflicts "
+                f"in {target}; to retry manually, use: git stash apply --index {stash}"
+            )
 
     try:
         with console.status(f"Publishing {remote}/{branch}…"):

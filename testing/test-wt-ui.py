@@ -6,7 +6,7 @@
 #     "rich>=13.9,<15",
 # ]
 # ///
-"""Exercise wt cleanup with disposable local Git repositories; no network needed."""
+"""Exercise wt flows with disposable local Git repositories; no network needed."""
 
 import importlib.machinery
 import importlib.util
@@ -35,7 +35,7 @@ with patch.object(sys, "dont_write_bytecode", True):
     LOADER.exec_module(wt)
 
 
-class CleanupTests(unittest.TestCase):
+class GitRepositoryTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -93,6 +93,18 @@ class CleanupTests(unittest.TestCase):
         self.git("commit", "-m", "feature", cwd=path)
         return self.git("rev-parse", "HEAD", cwd=path)
 
+    @contextmanager
+    def prompt_input(self, keys):
+        with (
+            create_pipe_input() as pipe,
+            create_app_session(input=pipe),
+            patch.object(wt, "prompt_output", DummyOutput()),
+        ):
+            pipe.send_text(keys)
+            yield
+
+
+class CleanupTests(GitRepositoryTests):
     def candidates(self):
         return wt.cleanup_candidates(self.repo, wt.list_worktrees(self.repo))
 
@@ -110,16 +122,6 @@ class CleanupTests(unittest.TestCase):
             result = wt.cleanup_worktrees(self.repo)
         prompt.assert_not_called()
         return result, prompt
-
-    @contextmanager
-    def prompt_input(self, keys):
-        with (
-            create_pipe_input() as pipe,
-            create_app_session(input=pipe),
-            patch.object(wt, "prompt_output", DummyOutput()),
-        ):
-            pipe.send_text(keys)
-            yield
 
     def test_clean_worktree_and_merged_reason(self):
         path = self.worktree(publish=True)
@@ -463,6 +465,303 @@ class CleanupTests(unittest.TestCase):
             self.assertEqual(wt.main(["cleanup", "--force"]), 2)
             self.assertEqual(wt.main(["--help"]), 0)
         find.assert_not_called()
+
+
+class NewBranchTests(GitRepositoryTests):
+    @property
+    def target(self):
+        return self.root / "new worktree"
+
+    def create_branch(self, *, answers=(True,), repository=None):
+        with (
+            patch.object(wt, "ask_new_branch_name", return_value="feature"),
+            patch.object(wt, "ask_worktree_path", return_value=self.target),
+            patch.object(wt, "confirm", side_effect=answers) as prompt,
+        ):
+            result = wt.create_new_branch(repository or self.repo)
+        return result, prompt
+
+    def advance_remote(self, filename="remote-only", content="remote change\n"):
+        other = self.root / "other clone"
+        self.git("clone", str(self.remote), str(other), cwd=self.root)
+        (other / filename).write_text(content)
+        self.git("add", ".", cwd=other)
+        self.git("commit", "-m", "remote change", cwd=other)
+        self.git("push", cwd=other)
+        return self.git("rev-parse", "HEAD", cwd=other)
+
+    def dirty_snapshot(self, repository=None):
+        repository = repository or self.repo
+        return tuple(
+            self.git(*args, cwd=repository)
+            for args in (
+                ("status", "--porcelain", "--untracked-files=all"),
+                ("diff", "--binary"),
+                ("diff", "--cached", "--binary"),
+            )
+        )
+
+    def test_clean_branch_still_pulls_creates_and_publishes_without_move_prompt(self):
+        head = self.advance_remote()
+        with patch.object(wt, "stash_worktree_changes") as stash:
+            result, prompt = self.create_branch()
+        stash.assert_not_called()
+        prompt.assert_called_once_with(
+            "Pull the base branch, create, and publish this branch?"
+        )
+        self.assertEqual(result, self.target)
+        self.assertEqual(self.git("rev-parse", "HEAD"), head)
+        self.assertEqual(self.git("rev-parse", "HEAD", cwd=result), head)
+        self.assertEqual(self.git("rev-parse", "origin/feature"), head)
+        self.assertEqual(
+            self.git("rev-parse", "--abbrev-ref", "@{upstream}", cwd=result),
+            "origin/feature",
+        )
+        self.assertFalse(wt.worktree_is_dirty(result))
+
+    def test_moves_staged_unstaged_and_untracked_preserving_existing_stashes(self):
+        self.git("config", "pull.rebase", "true")
+        (self.repo / ".gitignore").write_text("ignored\n")
+        self.git("add", ".gitignore")
+        self.git("commit", "-m", "ignore files")
+        self.git("push")
+        (self.repo / "tracked").write_text("older stashed change\n")
+        self.git("stash", "push", "-m", "user stash")
+        previous_stashes = self.git("stash", "list", "--format=%H %gs")
+        (self.repo / "tracked").write_text("staged change\n")
+        (self.repo / "staged new").write_bytes(b"staged binary\x00\xff")
+        self.git("add", ".")
+        (self.repo / "tracked").write_text("staged change\nunstaged change\n")
+        (self.repo / "untracked file").write_bytes(b"untracked\x00\xfe")
+        (self.repo / "ignored").write_text("leave here\n")
+        before = self.dirty_snapshot()
+        head = self.advance_remote()
+
+        result, prompt = self.create_branch(answers=(True, True))
+
+        self.assertEqual(result, self.target)
+        self.assertIn("Move uncommitted changes", prompt.call_args_list[0].args[0])
+        self.assertFalse(prompt.call_args_list[0].kwargs["default"])
+        self.assertFalse(wt.worktree_is_dirty(self.repo))
+        self.assertEqual(self.dirty_snapshot(result), before)
+        self.assertEqual((result / "untracked file").read_bytes(), b"untracked\x00\xfe")
+        self.assertEqual((result / "staged new").read_bytes(), b"staged binary\x00\xff")
+        self.assertFalse((self.repo / "untracked file").exists())
+        self.assertEqual((self.repo / "ignored").read_text(), "leave here\n")
+        self.assertFalse((result / "ignored").exists())
+        self.assertEqual(self.git("stash", "list", "--format=%H %gs"), previous_stashes)
+        self.assertEqual(self.git("rev-parse", "HEAD", cwd=result), head)
+        self.assertEqual(self.git("rev-parse", "origin/feature"), head)
+        self.assertEqual(self.git("branch", "--show-current"), "main")
+
+    def test_untracked_only_changes_are_offered_even_when_status_hides_them(self):
+        self.git("config", "status.showUntrackedFiles", "no")
+        (self.repo / "untracked").write_text("keep\n")
+        result, prompt = self.create_branch(answers=(True, True))
+        self.assertEqual(prompt.call_count, 2)
+        self.assertEqual((result / "untracked").read_text(), "keep\n")
+        self.assertFalse((self.repo / "untracked").exists())
+        self.assertFalse(self.git("stash", "list"))
+
+    def test_declining_either_prompt_keeps_changes_and_refs_untouched(self):
+        (self.repo / "tracked").write_text("keep staged\n")
+        self.git("add", "tracked")
+        (self.repo / "untracked").write_text("keep untracked\n")
+        before = self.dirty_snapshot()
+        head = self.git("rev-parse", "HEAD")
+        self.advance_remote()
+        for answers in ((False,), (True, False)):
+            with self.subTest(answers=answers):
+                result, prompt = self.create_branch(answers=answers)
+                self.assertIsNone(result)
+                self.assertEqual(prompt.call_count, len(answers))
+                self.assertEqual(self.dirty_snapshot(), before)
+                self.assertEqual(self.git("rev-parse", "HEAD"), head)
+                self.assertFalse(self.target.exists())
+                self.assertFalse(wt.local_branch_exists(self.repo, "feature"))
+                self.assertFalse(self.git("stash", "list"))
+
+    def test_cancelled_move_prompt_does_not_modify_anything(self):
+        (self.repo / "tracked").write_text("keep\n")
+        with (
+            patch.object(wt, "ask_new_branch_name", return_value="feature"),
+            patch.object(wt, "ask_worktree_path", return_value=self.target),
+            self.prompt_input("\x03"),
+            patch.object(wt, "stash_worktree_changes") as stash,
+        ):
+            self.assertIsNone(wt.create_new_branch(self.repo))
+        stash.assert_not_called()
+        self.assertEqual((self.repo / "tracked").read_text(), "keep\n")
+        self.assertFalse(self.target.exists())
+
+    def test_existing_remote_branch_aborts_before_stashing_or_pulling(self):
+        self.git("push", "origin", "main:feature")
+        (self.repo / "tracked").write_text("keep\n")
+        head = self.git("rev-parse", "HEAD")
+        self.advance_remote()
+        with (
+            patch.object(wt, "stash_worktree_changes") as stash,
+            self.assertRaisesRegex(
+                wt.WorktreeError, "remote branch origin/feature already exists"
+            ),
+        ):
+            self.create_branch(answers=(True, True))
+        stash.assert_not_called()
+        self.assertEqual(self.git("rev-parse", "HEAD"), head)
+        self.assertEqual((self.repo / "tracked").read_text(), "keep\n")
+
+    def test_failed_pull_restores_original_changes_and_index(self):
+        (self.repo / "tracked").write_text("staged\n")
+        self.git("add", "tracked")
+        (self.repo / "tracked").write_text("staged\nunstaged\n")
+        (self.repo / "untracked").write_text("keep\n")
+        before = self.dirty_snapshot()
+        self.git("config", "branch.main.merge", "refs/heads/nonexistent")
+        with self.assertRaises(wt.WorktreeError):
+            self.create_branch(answers=(True, True))
+        self.assertEqual(self.dirty_snapshot(), before)
+        self.assertEqual((self.repo / "untracked").read_text(), "keep\n")
+        self.assertFalse(self.target.exists())
+        self.assertFalse(self.git("stash", "list"))
+
+    def test_failed_worktree_creation_restores_changes_after_successful_pull(self):
+        (self.repo / "tracked").write_text("keep\n")
+        (self.repo / "untracked").write_text("keep untracked\n")
+        before = self.dirty_snapshot()
+        head = self.advance_remote()
+        self.target.mkdir()
+        (self.target / "obstruction").write_text("do not remove\n")
+        with self.assertRaises(wt.WorktreeError):
+            self.create_branch(answers=(True, True))
+        self.assertEqual(self.git("rev-parse", "HEAD"), head)
+        self.assertEqual(self.dirty_snapshot(), before)
+        self.assertEqual((self.target / "obstruction").read_text(), "do not remove\n")
+        self.assertFalse(self.git("stash", "list"))
+
+    def test_transfer_conflict_keeps_recovery_stash_and_does_not_publish(self):
+        (self.repo / "tracked").write_text("local change\n")
+        self.advance_remote("tracked", "conflicting remote change\n")
+        with self.assertRaisesRegex(
+            wt.WorktreeError, "carrying over changes failed"
+        ) as error:
+            self.create_branch(answers=(True, True))
+        stash = self.git("rev-parse", "refs/stash")
+        self.assertIn(stash, str(error.exception))
+        self.assertIn(str(self.target), str(error.exception))
+        self.assertIn("local change", self.git("show", f"{stash}:tracked"))
+        self.assertTrue(self.git("ls-files", "--unmerged", cwd=self.target))
+        self.assertFalse(wt.worktree_is_dirty(self.repo))
+        self.assertFalse(wt.remote_branch_exists(self.repo, "origin", "feature"))
+
+    def test_failed_restore_keeps_stash_and_reports_original_failure(self):
+        (self.repo / "tracked").write_text("local change\n")
+        self.advance_remote("tracked", "conflicting remote change\n")
+        self.target.mkdir()
+        (self.target / "obstruction").touch()
+        with self.assertRaisesRegex(
+            wt.WorktreeError, "Could not fully restore"
+        ) as error:
+            self.create_branch(answers=(True, True))
+        stash = self.git("rev-parse", "refs/stash")
+        self.assertIn(stash, str(error.exception))
+        self.assertIn(str(self.repo), str(error.exception))
+        self.assertIn("already exists", str(error.exception))
+        self.assertEqual(self.git("show", f"{stash}:tracked"), "local change")
+
+    def test_publish_failure_leaves_changes_in_new_worktree(self):
+        (self.repo / "tracked").write_text("keep\n")
+        run_git = wt.run_git
+
+        def fail_push(*args, **kwargs):
+            if args[0] == "push":
+                raise wt.WorktreeError("simulated push failure")
+            return run_git(*args, **kwargs)
+
+        with (
+            patch.object(wt, "run_git", side_effect=fail_push),
+            self.assertRaisesRegex(
+                wt.WorktreeError, "worktree created.*publish failed"
+            ),
+        ):
+            self.create_branch(answers=(True, True))
+        self.assertFalse(wt.worktree_is_dirty(self.repo))
+        self.assertEqual((self.target / "tracked").read_text(), "keep\n")
+        self.assertFalse(self.git("stash", "list"))
+
+    def test_can_carry_changes_from_a_linked_worktree(self):
+        source = self.worktree("source", publish=True)
+        (source / "tracked").write_text("linked worktree change\n")
+        (self.repo / "untracked").write_text("leave main alone\n")
+        result, _ = self.create_branch(answers=(True, True), repository=source)
+        self.assertFalse(wt.worktree_is_dirty(source))
+        self.assertEqual((result / "tracked").read_text(), "linked worktree change\n")
+        self.assertEqual((self.repo / "untracked").read_text(), "leave main alone\n")
+        self.assertEqual(self.git("branch", "--show-current", cwd=source), "source")
+
+    def test_submodule_changes_abort_without_losing_local_changes(self):
+        self.git("submodule", "add", str(self.remote), "sub")
+        self.git("commit", "-am", "add submodule")
+        self.git("push")
+        (self.repo / "sub/tracked").write_text("submodule work\n")
+        for top_level_changes in (False, True):
+            with self.subTest(top_level_changes=top_level_changes):
+                if top_level_changes:
+                    (self.repo / "tracked").write_text("top-level work\n")
+                before = self.dirty_snapshot()
+                with self.assertRaisesRegex(
+                    wt.WorktreeError, "submodules must be handled manually"
+                ):
+                    self.create_branch(answers=(True, True))
+                self.assertEqual(self.dirty_snapshot(), before)
+                self.assertEqual(
+                    (self.repo / "sub/tracked").read_text(), "submodule work\n"
+                )
+                self.assertFalse(self.target.exists())
+                self.assertFalse(self.git("stash", "list"))
+
+    def test_failed_stash_cleanup_keeps_saved_changes_and_recovery_instructions(self):
+        (self.repo / "tracked").write_text("local change\n")
+        git_process = wt.git_process
+
+        def fail_stash_cleanup(*args, **kwargs):
+            result = git_process(*args, **kwargs)
+            if args[:2] == ("stash", "push"):
+                return subprocess.CompletedProcess(
+                    result.args, 1, result.stdout, b"simulated stash cleanup failure"
+                )
+            return result
+
+        with (
+            patch.object(wt, "git_process", side_effect=fail_stash_cleanup),
+            self.assertRaisesRegex(wt.WorktreeError, "stash cleanup failure") as error,
+        ):
+            self.create_branch(answers=(True, True))
+        stash = self.git("rev-parse", "refs/stash")
+        self.assertEqual(self.git("show", f"{stash}:tracked"), "local change")
+        self.assertIn(f"git stash apply --index {stash}", str(error.exception))
+        self.assertFalse(self.target.exists())
+
+    def test_stash_housekeeping_failure_does_not_retry_successful_apply(self):
+        for command in ("list", "drop"):
+            with self.subTest(command=command):
+                (self.repo / "tracked").write_text("keep\n")
+                stash = wt.stash_worktree_changes(self.repo, "feature")
+                git_process = wt.git_process
+
+                def fail_housekeeping(*args, **kwargs):
+                    if args[:2] == ("stash", command):
+                        return subprocess.CompletedProcess(
+                            ["git", *args], 1, b"", b"simulated housekeeping failure"
+                        )
+                    return git_process(*args, **kwargs)
+
+                with patch.object(wt, "git_process", side_effect=fail_housekeeping):
+                    wt.apply_worktree_stash(self.repo, stash)
+                self.assertEqual((self.repo / "tracked").read_text(), "keep\n")
+                self.assertEqual(self.git("rev-parse", "refs/stash"), stash)
+                self.assertIn("could not be dropped", self.output.getvalue())
+                self.git("stash", "drop")
+                self.git("restore", "tracked")
 
 
 if __name__ == "__main__":

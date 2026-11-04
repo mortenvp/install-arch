@@ -481,7 +481,7 @@ wt
 `wt` first offers four interactive, arrow-key-driven flows:
 
 - **Use an existing remote branch:** fetch and prune all Git remotes, show remote branches newest-first by commit date, and create a tracking worktree (or enter its existing worktree).
-- **Create a new branch:** update the current branch with `git pull --ff-only`, create the branch in a new worktree, and publish it with `git push --set-upstream` to the current branch's remote.
+- **Create a new branch:** update the current branch with `git pull --ff-only`, create the branch in a new worktree, and publish it with `git push --set-upstream` to the current branch's remote. If there are uncommitted changes, first ask whether to move them to the new worktree (defaults to **No**; declining cancels without changing anything). Accepted transfers include staged, unstaged, and untracked files, preserve staging, and leave ignored files behind. A temporary stash protects the changes while pulling; failures before worktree creation attempt to restore them to the original worktree, and transfer conflicts retain the stash with recovery instructions. Existing stashes are preserved. Changes inside submodules must be handled manually.
 - **Delete an existing worktree:** pick a linked worktree (the main worktree is never offered), see its branch, upstream, unpushed commits, and dirty state, then remove it with `git worktree remove`. Deleting the local and remote branch are separate confirmations that default to **Yes**; discarding uncommitted changes and force-deleting an unmerged local branch default to **No**, and the remote's default branch is never deleted. If you delete the worktree you are standing in, `wt` moves you to the main worktree.
 - **Clean up worktrees:** fetch and prune all remotes, then review clean linked worktrees in a multi-select list. Suggestions show merge ancestry against the upstream remote's default branch (when known), a gone upstream, and unpushed commits. Without a remote upstream, merge ancestry is checked against any known remote default branch. Missing worktree directories are also offered for registration removal. The main worktree and dirty, locked, or detached worktrees are skipped. Ignored files (such as build output, caches, and virtual environments) do not block cleanup and are deleted with the worktree; affected worktrees are labeled. No boxes are checked initially. Press **Enter** to delete the highlighted worktree, or check multiple worktrees with **Space** and press **Enter** to delete only those checked. There is **no additional confirmation**. Press **Ctrl+C** to cancel without deleting anything. Cleanup rechecks each worktree, never forces removal, and **keeps all local and remote branches**, including unpushed commits. If your current worktree is removed, `wt` moves you to the main worktree.
 
@@ -494,7 +494,7 @@ wt prune
 
 A clean worktree only means there are no uncommitted changes—not that its branch was merged. A gone upstream is not proof of a merge either. Merge labels use Git ancestry against locally known remote default refs (`<remote>/HEAD`); squash/rebase merges may not be recognized. Use **Delete an existing worktree** if you also want to delete branches. Unlike `git worktree prune`, this cleanup flow can remove actual worktree directories after review, not just stale registrations.
 
-Test the cleanup flow with disposable local repositories (no installation required):
+Test the worktree flows with disposable local repositories (no installation required):
 
 ```bash
 uv run --script testing/test-wt-ui.py
