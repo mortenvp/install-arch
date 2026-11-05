@@ -10,7 +10,7 @@ Minimal personal Arch setup helper. Inspired by Omarchy, but simplified.
 - `config/`: user configuration files, generally copied into `~/.config/` (Claude Code settings go into `~/.claude/`).
 - `bin/`: user commands installed into `~/.local/bin/`.
 - `scripts/`: install/config helpers.
-  - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, Claude Code (official installer), and `tailscale`.
+  - Includes installer/config wrappers for Warp (official Arch pacman repo), Nix, `devbox`, `uv`, Claude Code (official installer), Blip AI (official AppImage), and `tailscale`.
 - `install.sh`: main entry point.
 
 ## Install
@@ -138,7 +138,7 @@ This will:
 4. Install AUR packages from `packages/aur.packages` (requires `yay`), and refresh installed development packages (for example `*-git`) to the latest upstream commits.
 5. Detect GPU vendor(s) and auto-install hardware codec packages when available (plus CPU decode baseline packages).
 6. On NVIDIA systems, install the DKMS driver/header packages and early-load NVIDIA DRM modules from the initramfs for more reliable monitor detection before GDM starts.
-7. Install upstream tools (`devbox`, `uv`, Claude Code, Herdr, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
+7. Install upstream tools (`devbox`, `uv`, Claude Code, Herdr, Blip AI, `tailscale`, `@earendil-works/pi-coding-agent`, `playwright`) via scripts in `scripts/`.
 8. Install user commands from `bin/`, apply configs from `config/`, bind Warp voice input to Right Super, and configure Pi to start with GPT-6.1 Sol at xhigh thinking.
 9. Install VS Code extensions from `packages/vscode.extensions` (if `code` is available).
 10. Bind VS Code `Alt+Q` to Rewrap Revived (`rewrap.rewrapComment`) when `code` is available.
@@ -153,7 +153,7 @@ This will:
 19. Apply GNOME keybindings, default to 8 workspaces, set dark mode, use a 24-hour clock, and disable idle screen blanking, dimming, and automatic suspend for desktops (if GNOME settings are available).
 20. Install Shatter Shell from Git, disable Pop Shell if present, and enable Shatter Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
 21. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
-22. Add GNOME autostart entry for `pear-desktop`.
+22. Add GNOME autostart entries for `pear-desktop` and Blip AI.
 23. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
 
 Skip optional steps:
@@ -165,6 +165,8 @@ SKIP_STEAM=1 ./install.sh
 SKIP_SHELL=1 ./install.sh
 SKIP_CLAUDE_CODE=1 ./install.sh
 SKIP_HERDR=1 ./install.sh
+SKIP_HERDR_AGENT_RESUME=1 ./install.sh
+SKIP_BLIP_AI=1 ./install.sh
 SKIP_PI_SETTINGS=1 ./install.sh
 SKIP_WARP_SETTINGS=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
@@ -283,9 +285,9 @@ Skip both Claude Code installation and configuration for a run:
 SKIP_CLAUDE_CODE=1 ./install.sh
 ```
 
-## Herdr (official installer)
+## Herdr (desktop and terminal apps)
 
-`install.sh` installs [Herdr](https://herdr.dev/) through `scripts/install-upstream-tools.sh` and `scripts/install-herdr.sh`. The script uses the official installers at `https://releases.herdr.dev/core/install.sh` and `https://releases.herdr.dev/app/install.sh`, installing `herdr-core` first, then the desktop app. Downloads complete before execution; upstream verifies release archive checksums.
+`install.sh` installs the Herdr desktop app and the [Herdr terminal app](https://github.com/herdrdev/herdr) through `scripts/install-upstream-tools.sh` and `scripts/install-herdr.sh`. The script uses the official installers at `https://releases.herdr.dev/core/install.sh` and `https://releases.herdr.dev/app/install.sh`, installing `herdr-core` first, then the desktop app. It also installs the separate `herdr` terminal command using `https://herdr.dev/install.sh`. Downloads complete before execution; upstream verifies release checksums.
 
 Run just this step as your normal user:
 
@@ -293,14 +295,94 @@ Run just this step as your normal user:
 ./scripts/install-herdr.sh
 ```
 
-The app lives in `$XDG_DATA_HOME/herdr-app` (default `~/.local/share/herdr-app`), with `herdr-app` and `herdr-core` commands in `~/.local/bin` and a GNOME app-launcher entry. Upstream also adds `hc` if that command is not already taken. Existing app/core installations are left alone; reruns install only missing components. Herdr manages subsequent updates itself. No Herdr settings or autostart entries are changed by this repo.
+The desktop app lives in `$XDG_DATA_HOME/herdr-app` (default `~/.local/share/herdr-app`), with `herdr-app` and `herdr-core` commands in `~/.local/bin` and a GNOME app-launcher entry. Upstream also adds `hc` if that command is not already taken. The terminal app is installed as `~/.local/bin/herdr`; run `herdr` in your existing terminal to start it. Existing desktop, core, and terminal installations are left alone; reruns install only missing components. The desktop app manages subsequent updates itself; use `herdr update` for the terminal app. This component installer does not change Herdr settings or add autostart entries. The full pipeline also installs the agent-resume mod described below.
 
-The script installs missing Arch dependencies (`curl`, `tar`, `libxkbcommon-x11`, and `vulkan-icd-loader`) via pacman. A desktop session and a working Vulkan driver are required; it does not select or replace your GPU driver. Launch **Herdr** from GNOME or run `herdr-app`.
+The script installs missing Arch dependencies (`curl` and `gawk`, plus `tar`, `libxkbcommon-x11`, and `vulkan-icd-loader` when desktop/core installation is needed) via pacman. The desktop app requires a desktop session and a working Vulkan driver; the script does not select or replace your GPU driver. Launch **Herdr** from GNOME or run `herdr-app`. Installing only the missing terminal command does not require desktop dependencies.
 
 Skip installation with `SKIP_HERDR=1 ./install.sh`; the flag also works with `scripts/install-herdr.sh` and `scripts/install-upstream-tools.sh`. Test without network access or installation:
 
 ```bash
 python testing/test-herdr.py
+```
+
+### Herdr agent resume (auto mode)
+
+After installing Herdr and Pi, the full pipeline runs `scripts/install-herdr-agent-resume.sh`. It installs [mortenvp/herdr-agent-resume](https://github.com/mortenvp/herdr-agent-resume), pinned to commit `a62a3eeb9d2fc46f60490ecd44042b0a0b77cb28` (v0.4.1), with `--auto --update --no-adopt`. Change the pinned revision in the script deliberately after reviewing fork updates; it does not track upstream automatically.
+
+```bash
+./scripts/install-herdr-agent-resume.sh
+# Remove the mod, its hooks, shortcut and shell-startup blocks:
+./scripts/install-herdr-agent-resume.sh --uninstall
+```
+
+The mod lives in `~/.config/herdr-app/mods/agent-resume` (`HERDR_APP_HOME` or `XDG_CONFIG_HOME` can change the app directory). Its installer adds Ctrl+Shift+R, a Pi session-reporting extension in `~/.pi/agent/extensions`, hooks for other supported agents already configured on this machine, and automatic-resume blocks for configured bash/zsh/fish shells. The wrapper initializes absent Herdr/Pi configuration directories and Fish's `conf.d` when Fish is installed, so a fresh setup is covered too. Agent and Fish configuration locations follow the mod's standard `~/.pi`, `~/.claude`, `~/.config/fish`, etc. paths; custom agent/Fish config roots are not supported by this revision.
+
+The installer backs up changed files under the app home's `backups/agent-resume/`. Reruns update installer-owned mod files and refresh auto-mode configuration; edited mod files, conflicting shortcuts, symlinked configuration files and unrelated same-named Pi extensions are refused. Missing `git`/`python` are installed with pacman. `SKIP_HERDR=1` or `SKIP_HERDR_AGENT_RESUME=1` skips this step without disabling an existing installation.
+
+The wrapper supplies `scripts/herdr-pi-session-hook.js` as the installer's Pi extension template. It records only transcript files that actually exist (Pi allocates a filename before saving any messages), records newly saved sessions before the first provider request, and retries ignored/failed hook attempts instead of treating every zero exit code as success. The upstream installer still owns extension backups and removal.
+
+No core restart, logout or reboot is performed. New agent sessions pick up the hooks; existing Pi sessions inside Herdr need `/reload`, while other running agents need to be restarted/resumed before their new hooks record them. Auto mode runs when a kept terminal's replacement shell starts, not merely when the desktop window opens. To pause automatic recovery, export `AGENT_RESUME_AUTO=0` in the relevant shell configuration (Fish: `set -gx AGENT_RESUME_AUTO 0`).
+
+To inspect recovery without starting anything:
+
+```bash
+python3 "${HERDR_APP_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr-app}/mods/agent-resume/agent_resume.py" status
+```
+
+A Pi label reporting `no saved conversation to resume` cannot recover a transcript that was never written. Use `pi --resume` in that Herdr pane to choose an existing saved conversation; recovery deliberately does not substitute an arbitrary recent session. A brand-new Pi session needs at least one saved message to be recoverable.
+
+**Experimental:** this pinned revision still has known Pi launch-option limitations and a manual/automatic recovery race. It can lose CLI tool restrictions or custom session-directory options; its argument filter can retain positional prompt text if captured alongside certain flags. Do not rely on it to preserve safety restrictions or guarantee idle-only recovery. Avoid pressing Ctrl+Shift+R while automatic recovery is running. The wrapper adds installer guards and the Pi extension fix above, but does not patch the Python mod itself.
+
+Offline installer and Pi lifecycle tests:
+
+```bash
+python testing/test-herdr-agent-resume.py
+node --test testing/test-herdr-pi-session-hook.mjs
+```
+
+## Blip AI (official Linux AppImage)
+
+`install.sh` installs [Blip AI](https://www.blipai.app/linux) through `scripts/install-upstream-tools.sh` and `scripts/install-blip-ai.sh`. It downloads the latest official x86_64 AppImage from `abnsl0014/blipai-releases` on GitHub, verifies the release asset's SHA-256 digest, and installs it as `~/.local/bin/BlipAI.AppImage`, with a **Blip AI** GNOME launcher. It never launches the app during installation. Other architectures are skipped.
+
+Run just this step as your normal user:
+
+```bash
+./scripts/install-blip-ai.sh
+```
+
+Missing Arch dependencies (`curl`, `jq`, `fuse2`, `wtype`, `wl-clipboard`, and `ydotool`) are installed with pacman. Existing executable AppImages at that path are preserved on reruns (this script is not an updater). The installer calls `scripts/configure-blip-ai.sh` to recreate the launcher under `${XDG_DATA_HOME:-$HOME/.local/share}/applications/` and an autostart entry at `${XDG_CONFIG_HOME:-$HOME/.config}/autostart/blip-ai.desktop`. Blip AI starts when you log into GNOME, including after a reboot, not before login.
+
+Enable autostart for an already-installed AppImage without downloading, installing packages, or launching the app:
+
+```bash
+./scripts/configure-blip-ai.sh
+```
+
+### Wayland setup (explicit permission grant)
+
+Following [upstream's setup guide](https://www.blipai.app/articles/linux-setup), GNOME Wayland needs input access and the ydotool user daemon. **These are not enabled automatically:** membership in `input` allows applications running as your user to read raw keyboard/mouse events, potentially including passwords, and use input devices outside Wayland's normal isolation. Only grant it on a trusted personal machine:
+
+```bash
+sudo groupadd -f input
+sudo usermod -aG input "$(id -un)"
+```
+
+Fully log out and back in (or reboot), then run these in your graphical session:
+
+```bash
+groups | grep input
+systemctl --user enable --now ydotool
+systemctl --user status ydotool
+```
+
+If the daemon cannot access `/dev/uinput`, check the device permissions and group membership; do not make input devices world-writable. X11 does not need these Wayland steps.
+
+Blip AI opens automatically at your next GNOME login. To use it now, open **Blip AI** from GNOME or run `~/.local/bin/BlipAI.AppImage`, sign in, and hold **Ctrl+Super** to dictate. No Blip settings or hotkeys are changed by this repo.
+
+Skip installation and autostart setup with `SKIP_BLIP_AI=1 ./install.sh`; the flag also works with `scripts/install-blip-ai.sh`, `scripts/configure-blip-ai.sh`, and `scripts/install-upstream-tools.sh`. Skipping leaves existing autostart entries unchanged. Test without network access, installation, or permission changes:
+
+```bash
+python testing/test-blip-ai.py
 ```
 
 ## Pi coding agent defaults
