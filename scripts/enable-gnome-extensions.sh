@@ -26,6 +26,7 @@ SHATTER_SHELL_UUID="shatter-shell@adilhanney.com"
 POP_SHELL_UUID="pop-shell@system76.com"
 ARCH_UPDATE_UUID="arch-update@RaphaelRochet"
 GSCONNECT_UUID="gsconnect@andyholmes.github.io"
+GITHUB_TRAY_UUID="github-tray@debba.github.com"
 
 mapfile -t installed_extensions < <(gnome-extensions list)
 
@@ -86,6 +87,21 @@ else
   else
     log_step "GSConnect extension not found; skipping"
   fi
+fi
+
+if [[ "${SKIP_GITHUB_TRAY:-}" == "1" ]]; then
+  log_step "Skipping GitHub Tray configuration (SKIP_GITHUB_TRAY=1)"
+elif printf '%s\n' "${installed_extensions[@]}" | grep -Fxq "$GITHUB_TRAY_UUID" ||
+    [[ -d "${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$GITHUB_TRAY_UUID" ||
+       -d "/usr/share/gnome-shell/extensions/$GITHUB_TRAY_UUID" ]]; then
+  log_step "Enabling GitHub Tray ($GITHUB_TRAY_UUID)"
+  if gnome-extensions enable "$GITHUB_TRAY_UUID"; then
+    enabled_any=1
+  else
+    log_step "GitHub Tray could not be enabled in this session; log out/in and run this script again"
+  fi
+else
+  log_step "GitHub Tray extension not found; skipping"
 fi
 
 appindicator_uuid="$(printf '%s\n' "${installed_extensions[@]}" | grep '^appindicatorsupport@' | head -n 1 || true)"

@@ -23,5 +23,8 @@ log_step "Installing AUR packages"
 log_step "Installing Shatter Shell from Git"
 "$SCRIPT_DIR/install-shatter-shell.sh"
 
+log_step "Installing GitHub Tray GNOME extension"
+"$SCRIPT_DIR/install-github-tray.sh"
+
 log_step "Installing upstream tools"
 "$SCRIPT_DIR/install-upstream-tools.sh"

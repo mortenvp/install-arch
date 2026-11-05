@@ -315,6 +315,7 @@ cp "$TEST_FIXTURES/$resource" "$4"
         for name in (
             "cleanup-npm-global-conflicts", "install-packages", "install-steam",
             "install-warp-terminal", "install-aur-packages", "install-shatter-shell",
+            "install-github-tray",
             "install-devbox", "install-uv", "install-claude-code", "install-herdr",
             "install-tailscale", "install-pi-dev", "install-pi-agent-stuff",
             "install-herdr-agent-resume", "install-playwright",

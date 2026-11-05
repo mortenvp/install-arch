@@ -312,6 +312,7 @@ cp "$TEST_FIXTURES/$component.sh" "$4"
             "install-warp-terminal",
             "install-aur-packages",
             "install-shatter-shell",
+            "install-github-tray",
             "install-devbox",
             "install-uv",
             "install-claude-code",

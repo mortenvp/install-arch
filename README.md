@@ -151,7 +151,7 @@ This will:
 17. Enable and start `tailscaled.service` with `systemctl` when available.
 18. Set the default shell to fish.
 19. Apply GNOME keybindings, default to 8 workspaces, set dark mode, use a 24-hour clock, and disable idle screen blanking, dimming, and automatic suspend for desktops (if GNOME settings are available).
-20. Install Shatter Shell from Git, disable Pop Shell if present, and enable Shatter Shell, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
+20. Install Shatter Shell from Git and GitHub Tray from its verified release, disable Pop Shell if present, and enable Shatter Shell, GitHub Tray, GSConnect, AppIndicator tray support, and Arch Update Indicator (if available).
 21. Configure Arch Update Indicator to check/apply updates with `yay` (if installed).
 22. Add GNOME autostart entries for `pear-desktop` and Blip AI.
 23. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
@@ -172,6 +172,7 @@ SKIP_WARP_SETTINGS=1 ./install.sh
 SKIP_VSCODE_EXTENSIONS=1 ./install.sh
 SKIP_GNOME_EXTENSIONS=1 ./install.sh
 SKIP_SHATTER_SHELL=1 ./install.sh
+SKIP_GITHUB_TRAY=1 ./install.sh
 SKIP_GNOME_KEYBINDINGS=1 ./install.sh
 SKIP_GNOME_WORKSPACES=1 ./install.sh
 SKIP_GNOME_THEME=1 ./install.sh
@@ -458,6 +459,37 @@ Test without installing packages, accessing the network, or changing GNOME setti
 
 ```bash
 python testing/test-shatter-shell.py
+```
+
+## GitHub Tray GNOME extension
+
+The package step runs `scripts/install-github-tray.sh` to install [debba/github-tray-gnome-extension](https://github.com/debba/github-tray-gnome-extension). It downloads the upstream **v19** release bundle, checks its pinned SHA-256 digest, validates GNOME compatibility and settings schemas, and installs it for your user with `gnome-extensions install`. This release supports GNOME Shell 45–51. Review the release and digest before updating the pin in the script.
+
+```bash
+./scripts/install-github-tray.sh
+./scripts/enable-gnome-extensions.sh
+```
+
+A new extension may not be visible to the running Shell yet. On Wayland, log out and back in, then rerun the enable script if needed. No logout or Shell restart is performed automatically. The extension lives under `${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/github-tray@debba.github.com`; its compiled settings schema is included. Reruns preserve the pinned version or a newer compatible installation instead of downloading or downgrading it.
+
+Missing Arch dependencies (`curl`, `jq`, `unzip`, `glib2`, `libsoup3`, and `zenity`) are installed with pacman. GNOME must already be installed. Installation does not configure authentication or copy credentials from `gh` or other tools.
+
+GitHub Tray is a panel widget, not a separate app. The installer runs `scripts/configure-github-tray.sh` to add a **GitHub Tray Settings** launcher under `${XDG_DATA_HOME:-$HOME/.local/share}/applications/`. Search for it in GNOME to open authentication/preferences directly. The widget's initial “configure token and username” message is not clickable, and its gear button may not appear until repositories have loaded. You can also open preferences with:
+
+```bash
+gnome-extensions prefs github-tray@debba.github.com
+```
+
+To create or repair just the launcher for an existing installation, run `./scripts/configure-github-tray.sh`; this does not download, enable, or launch anything.
+
+In **Authentication**, enter your GitHub username and personal access token manually, pressing each field's Apply/checkmark button to save. Upstream documents `public_repo` for public repositories or `repo` for private repositories; use the least privileges you need. **Upstream stores the token in GSettings, not an encrypted keyring.** Never put tokens in this repo, scripts, or shell commands/history.
+
+`SKIP_GITHUB_TRAY=1` skips installation, launcher setup, and enabling without disabling an existing installation. `SKIP_GNOME_EXTENSIONS=1` skips extension enabling only, consistent with Shatter Shell; package installation still creates the settings launcher.
+
+Offline tests (no downloads, package installs, or real GNOME changes):
+
+```bash
+python testing/test-github-tray.py
 ```
 
 ## GNOME power defaults
