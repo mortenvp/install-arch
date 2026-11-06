@@ -308,7 +308,7 @@ python testing/test-herdr.py
 
 ### Herdr agent resume (auto mode)
 
-After installing Herdr and Pi, the full pipeline runs `scripts/install-herdr-agent-resume.sh`. It installs [mortenvp/herdr-agent-resume](https://github.com/mortenvp/herdr-agent-resume), pinned to commit `a62a3eeb9d2fc46f60490ecd44042b0a0b77cb28` (v0.4.1), with `--auto --update --no-adopt`. Change the pinned revision in the script deliberately after reviewing fork updates; it does not track upstream automatically.
+After installing Herdr and Pi, the full pipeline runs `scripts/install-herdr-agent-resume.sh`. It installs [mortenvp/herdr-agent-resume](https://github.com/mortenvp/herdr-agent-resume), pinned to commit `a62a3eeb9d2fc46f60490ecd44042b0a0b77cb28` (v0.4.1), with `--auto --update --no-adopt`. Change the pinned revision in the script deliberately after reviewing fork updates; it does not track upstream automatically. Before updating, follow the [workaround review and retirement checklist](#herdr-workaround-review-and-retirement).
 
 ```bash
 ./scripts/install-herdr-agent-resume.sh
@@ -340,6 +340,25 @@ Offline installer and Pi lifecycle tests:
 python testing/test-herdr-agent-resume.py
 node --test testing/test-herdr-pi-session-hook.mjs
 ```
+
+### Herdr workaround review and retirement
+
+**These customizations are temporary workarounds, not features we want to maintain forever.** At each Herdr app/core update, and before updating a mod pin or local compatibility fix, check whether upstream now supports the behavior. Prefer native support and retire the redundant mod or patch once it is verified.
+
+Review baseline: **Herdr desktop 0.1.13**. Issue states below are from that review; recheck them rather than treating them as permanent.
+
+| Customization | Upstream tracking / what to review | When we can drop it |
+| --- | --- | --- |
+| Agent-resume mod (**installed**) | [herdr-app#406: reboot/session recovery](https://github.com/herdrdev/herdr-app/issues/406) (open); check desktop/core release notes and native agent-session metadata. | Native recovery automatically restores the correct Pi/Claude conversation in each kept pane after reboot, preserves launch restrictions, and does not restart intentionally exited agents or arbitrary commands. |
+| Local Pi recording fix (**installed**, `scripts/herdr-pi-session-hook.js`) | Review the [agent-resume fork](https://github.com/mortenvp/herdr-agent-resume), especially its Pi extension, before moving the pin. This patch may become unnecessary before the whole mod does. | The reviewed upstream extension waits for an actual saved transcript and retries ignored/failed hook attempts. Then remove our template substitution instead of carrying a duplicate fix. |
+| Sibling worktree folders (**planned; no custom mod installed yet**) | Desired layout: `<repo>.worktrees/<branch>`. [herdr-app#289](https://github.com/herdrdev/herdr-app/issues/289) (open) tracks the difficulty of replacing the worktree mod. [herdr#261](https://github.com/herdrdev/herdr/issues/261) requests this exact path layout but was closed as **not planned** and concerns the **terminal app**, not the desktop app. No dedicated desktop path-setting issue was found in this review. | A native desktop setting/template supports sibling placement relative to each repository's main checkout, including creation from an existing linked worktree. If a custom mod is added meanwhile, link its files and removal steps here. |
+
+On each review:
+
+1. Check current desktop release notes, settings, shipped mods, and the linked issues. A closed issue, proposed PR, or terminal-only feature is **not** proof that the desktop behavior is available.
+2. In a backed-up test setup, disable the matching workaround and test the native replacement. For agent recovery, verify Pi and Claude across a controlled reboot; for worktree placement, verify the destination from both the main checkout and a linked worktree. Do not leave two automatic recovery mechanisms enabled together.
+3. If native support is sufficient, remove the workaround's pipeline call, installer/configuration, obsolete flags, patches, and workaround-only tests/docs as appropriate. Uninstall an existing agent-resume installation with `./scripts/install-herdr-agent-resume.sh --uninstall`; `SKIP_HERDR_AGENT_RESUME=1` only skips setup and **does not uninstall it**. Removing a worktree customization must not delete or move existing worktrees.
+4. Record the reviewed versions, result, and remaining need in this section. If support is still missing, keep the workaround and its regression tests; do not update personal mod clones blindly, since they no longer receive shipped-mod fixes automatically.
 
 ## Blip AI (official Linux AppImage)
 
