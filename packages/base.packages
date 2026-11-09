@@ -25,6 +25,7 @@ sshfs
 util-linux
 dosfstools
 gnome-disk-utility
+pacman-contrib
 
 # Quality of life
 less

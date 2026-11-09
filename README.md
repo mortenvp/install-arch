@@ -156,6 +156,8 @@ This will:
 22. Add GNOME autostart entries for `pear-desktop` and Blip AI.
 23. Sync GNOME monitor layout to GDM via `/etc/xdg/monitors.xml` and `/var/lib/gdm/.config/monitors.xml`, remapping unstable connector names from monitor EDIDs when available, and install a `gdm.service` drop-in to refresh both before login.
 
+The installer also enables and starts `paccache.timer` (`sudo systemctl enable --now paccache.timer`) for weekly pacman cache cleanup, keeping the latest three cached versions of each package by default. The timer is provided by `pacman-contrib`, included in `packages/base.packages`.
+
 Skip optional steps:
 
 ```bash
