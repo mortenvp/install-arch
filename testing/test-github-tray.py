@@ -20,6 +20,25 @@ URL = ("https://github.com/debba/github-tray-gnome-extension/releases/download/"
        "v19/github-tray%40debba.github.com.zip")
 
 
+def patch_preimages():
+    """Minimal offline release sources: exact old hunks, comments elsewhere.
+
+    These are not executable full modules. JS behavior tests extract the complete
+    methods added by the patch; the real pinned bundle is checked separately.
+    """
+    sources = {}
+    lines = None
+    for line in (ROOT / "patches/github-tray-v19-done.patch").read_text().splitlines(True):
+        if line.startswith("--- a/"):
+            lines = sources.setdefault(line[6:].strip(), [])
+        elif line.startswith("@@ "):
+            start = int(re.match(r"@@ -(\d+)", line)[1])
+            lines.extend(["// upstream fixture\n"] * (start - 1 - len(lines)))
+        elif line.startswith((" ", "-")):
+            lines.append(line[1:])
+    return {name: "".join(content) for name, content in sources.items()}
+
+
 @unittest.skipIf(os.geteuid() == 0, "Installation must run as a normal user")
 class GitHubTrayTests(unittest.TestCase):
     def setUp(self):
@@ -36,7 +55,7 @@ class GitHubTrayTests(unittest.TestCase):
         self.extension = self.data / "gnome-shell/extensions" / UUID
         self.log = self.directory / "commands.log"
         self.log.touch()
-        for name in ("bash", "dirname", "mktemp", "rm", "unzip", "jq", "sha256sum", "python3", "grep", "head", "cat", "install"):
+        for name in ("bash", "dirname", "mktemp", "rm", "unzip", "jq", "sha256sum", "python3", "grep", "head", "cat", "install", "patch"):
             executable = shutil.which(name)
             self.assertIsNotNone(executable, f"Test dependency missing: {name}")
             (self.bins / name).symlink_to(executable)
@@ -61,6 +80,10 @@ class GitHubTrayTests(unittest.TestCase):
   </schema>
 </schemalist>
 '''
+        self.sources = patch_preimages()
+        patches = self.directory / "patches"
+        patches.mkdir()
+        shutil.copy2(ROOT / "patches/github-tray-v19-done.patch", patches)
         self.save_bundle()
         self.mock("gnome-shell", 'printf "GNOME Shell %s\\n" "${TEST_GNOME_VERSION:-51.1}"\n')
         self.mock("pacman", '''[[ "$1" == -Q ]] || exit 99
@@ -97,12 +120,14 @@ esac
         with zipfile.ZipFile(self.bundle, "w") as archive:
             archive.writestr("metadata.json", json.dumps(self.metadata))
             archive.writestr("schemas/org.gnome.shell.extensions.github-tray.gschema.xml", self.schema)
-            archive.writestr("extension.js", "// fixture: never executed\n")
+            for name, content in self.sources.items():
+                archive.writestr(name, content)
         digest = hashlib.sha256(self.bundle.read_bytes()).hexdigest()
         # Only the pinned checksum changes for our offline fixture; production URL/version stay intact.
         source, count = re.subn(r'SHA256="[a-f0-9]{64}"', f'SHA256="{digest}"',
                                (ROOT / "scripts/install-github-tray.sh").read_text())
         self.assertEqual(count, 1)
+        source = source.replace("$SCRIPT_DIR/../patches/", "$SCRIPT_DIR/patches/")
         (self.directory / "install-github-tray.sh").write_text(source)
 
     def mock(self, name, body):
@@ -150,6 +175,51 @@ esac
         self.assertFalse(any(line.startswith(("curl ", "gnome-extensions install ")) for line in self.commands()))
         self.assertEqual((self.extension / "extension.js").read_bytes(), original)
         self.assertEqual(self.launcher.read_text(), launcher)
+
+    def test_existing_pristine_v19_gets_done_without_downloading(self):
+        with zipfile.ZipFile(self.bundle) as archive:
+            archive.extractall(self.extension)
+        self.run_script()
+        self.assertIn("async markNotificationDone(", (self.extension / "githubApi.js").read_text())
+        self.assertFalse(any(line.startswith(("curl ", "gnome-extensions install ")) for line in self.commands()))
+
+    def test_incompatible_existing_sources_are_not_partially_patched(self):
+        with zipfile.ZipFile(self.bundle) as archive:
+            archive.extractall(self.extension)
+        api = self.extension / "githubApi.js"
+        api.write_text(api.read_text().replace("async fetchRepoWorkflowRuns(", "async customWorkflowRuns("))
+        original = {name: (self.extension / name).read_bytes() for name in self.sources}
+        result = self.run_script(success=False)
+        self.assertIn("do not match the v19 Done patch", result.stderr)
+        self.assertEqual(original, {name: (self.extension / name).read_bytes() for name in self.sources})
+        self.assertFalse(any(self.extension.glob("*.rej")))
+
+    def test_incompatible_bundle_is_rejected_before_installing(self):
+        self.sources["githubApi.js"] = "// unsupported source\n"
+        self.save_bundle()
+        self.run_script(success=False)
+        self.assertFalse(self.extension.exists())
+        self.assertFalse(any(line.startswith("gnome-extensions install ") for line in self.commands()))
+
+    def test_symlinked_source_is_not_patched(self):
+        with zipfile.ZipFile(self.bundle) as archive:
+            archive.extractall(self.extension)
+        source = self.extension / "ui.js"
+        target = self.directory / "external-ui.js"
+        source.rename(target)
+        original = target.read_bytes()
+        source.symlink_to(target)
+        self.run_script(success=False)
+        self.assertEqual(target.read_bytes(), original)
+
+    @unittest.skipUnless(shutil.which("node"), "JS behavior tests require Node.js")
+    def test_done_behavior(self):
+        self.run_script()
+        result = subprocess.run(
+            [shutil.which("node"), str(ROOT / "testing/test-github-tray-done.mjs"),
+             str(self.extension)], capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_installs_only_missing_dependencies_noninteractively(self):
         self.run_script(TEST_MISSING_PACKAGES="libsoup3 zenity")

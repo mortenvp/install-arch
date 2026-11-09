@@ -1,0 +1,238 @@
+--- a/githubApi.js
++++ b/githubApi.js
+@@ -250,6 +250,26 @@
+     }
+   }
+ 
++  // GitHub's Done action is distinct from marking a thread as read.
++  async markNotificationDone(token, threadId, cancellable = null) {
++    const message = Soup.Message.new(
++      "DELETE",
++      `${this._apiUrl}/notifications/threads/${encodeURIComponent(threadId)}`,
++    );
++    message.request_headers.append("Authorization", `Bearer ${token}`);
++    message.request_headers.append("Accept", "application/vnd.github+json");
++    message.request_headers.append("User-Agent", "GNOME-Shell-GitHub-Tray");
++
++    await this._httpSession.send_and_read_async(
++      message,
++      GLib.PRIORITY_DEFAULT,
++      cancellable,
++    );
++    if (message.get_status() !== Soup.Status.NO_CONTENT) {
++      throw new Error(`HTTP ${message.get_status()}`);
++    }
++  }
++
+   async fetchRepoWorkflowRuns(token, owner, repo, perPage = 10, cancellable = null) {
+     // Fetch workflow runs for a specific repository
+     const url = `${this._apiUrl}/repos/${owner}/${repo}/actions/runs?per_page=${perPage}`;
+--- a/notificationManager.js
++++ b/notificationManager.js
+@@ -19,6 +19,7 @@
+ 
+     this._lastNotifications = [];
+     this._unreadCount = 0;
++    this._notificationRevision = 0;
+   }
+ 
+   get lastNotifications() {
+@@ -33,6 +34,7 @@
+   async load(merge = false) {
+     const token = this._settings?.get_string("github-token");
+     if (!token) return;
++    const revision = this._notificationRevision;
+ 
+     try {
+       const api = new GitHubApi(this._httpSession, this._settings.get_string("github-enterprise-url"));
+@@ -52,6 +54,9 @@
+         // Non-fatal: continue without state enrichment
+       }
+ 
++      // A load started before Done must not put the dismissed thread back.
++      if (!this._settings || revision !== this._notificationRevision) return;
++
+       if (merge && this._lastNotifications.length > 0) {
+         // Append only new notifications not already in the buffer
+         const existingIds = new Set(this._lastNotifications.map((n) => n.id));
+@@ -138,6 +143,40 @@
+     }
+   }
+ 
++  // Mark Done on GitHub first; keep the local notification on failure.
++  async markDone(notification, callback = () => {}) {
++    const token = this._settings?.get_string("github-token");
++    if (!token) {
++      callback(false);
++      return;
++    }
++
++    try {
++      const api = new GitHubApi(this._httpSession, this._settings.get_string("github-enterprise-url"));
++      await api.markNotificationDone(token, notification.id, this._cancellable);
++    } catch (error) {
++      if (!isCancelled(error)) console.error(error, "GitHubTray:markNotificationDone");
++      callback(false);
++      return;
++    }
++
++    // The extension may have been disabled while the request was in flight.
++    if (!this._settings || this._cancellable?.is_cancelled()) {
++      callback(false);
++      return;
++    }
++    this._notificationRevision++;
++    // Pending menu snapshots can still reference this notification object.
++    notification.unread = false;
++    this._lastNotifications = this._lastNotifications.filter(
++      (n) => n.id !== notification.id,
++    );
++    this._unreadCount = this._lastNotifications.filter((n) => n.unread).length;
++    this._ui.updateBadge(this._unreadCount);
++    this._ui.refreshNotifications(this._lastNotifications);
++    callback(true);
++  }
++
+   // Filters notifications based on user settings
+   _filter(notifications) {
+     return notifications.filter((n) => {
+--- a/extension.js
++++ b/extension.js
+@@ -89,6 +89,8 @@
+         this._workflowManager.rerun(workflowRun, callback),
+       (repo, callback) => this._workflowManager.fetchForRepo(repo, callback),
+       () => this._notificationManager.load(),
++      (notification, callback) =>
++        this._notificationManager.markDone(notification, callback),
+     );
+ 
+     // Menu open-state handler
+@@ -353,14 +355,13 @@
+           if (!this._indicator) return GLib.SOURCE_REMOVE;
+ 
+           if (this._pendingUpdate) {
+-            const { repos, username, userInfo, notifications } =
+-              this._pendingUpdate;
++            const { repos, username, userInfo } = this._pendingUpdate;
+             this._pendingUpdate = null;
+             this._ui.updateMenu(
+               repos,
+               username,
+               userInfo,
+-              notifications || this._notificationManager.lastNotifications,
++              this._notificationManager.lastNotifications,
+             );
+           }
+ 
+--- a/ui.js
++++ b/ui.js
+@@ -129,12 +129,14 @@
+     onRerunWorkflow = null,
+     onFetchWorkflowRuns = null,
+     onRefreshNotifications = null,
++    onMarkNotificationDone = null,
+   ) {
+     this._onFetchRepoData = onFetchRepoData;
+     this._onMarkNotificationRead = onMarkNotificationRead;
+     this._onRerunWorkflow = onRerunWorkflow;
+     this._onFetchWorkflowRuns = onFetchWorkflowRuns;
+     this._onRefreshNotifications = onRefreshNotifications;
++    this._onMarkNotificationDone = onMarkNotificationDone;
+ 
+     // Apply font size class
+     this._applyFontSize();
+@@ -1325,12 +1327,12 @@
+     markReadBtn.set_child(checkIcon);
+     markReadBtn.connect("clicked", () => {
+       if (this._onMarkNotificationRead) {
+-        this._onMarkNotificationRead(notification, () => {
+-          menuItem.destroy();
+-        });
++        // Successful actions refresh the list; failures must keep the row.
++        this._onMarkNotificationRead(notification, () => {});
+       }
+     });
+     titleRow.add_child(markReadBtn);
++    titleRow.add_child(this._createDoneButton(notification, menuItem, markReadBtn));
+ 
+     mainBox.add_child(titleRow);
+     menuItem.add_child(mainBox);
+@@ -1342,6 +1344,31 @@
+     return menuItem;
+   }
+ 
++  _createDoneButton(notification, menuItem, markReadBtn) {
++    const doneBtn = new St.Button({
++      label: _("Done"),
++      accessible_name: _("Mark as done on GitHub"),
++      style_class: "button github-tray-mark-read-btn",
++      can_focus: true,
++    });
++    let destroyed = false;
++    menuItem.connect("destroy", () => { destroyed = true; });
++    doneBtn.connect("clicked", () => {
++      if (!this._onMarkNotificationDone || !doneBtn.reactive) return;
++      doneBtn.set_reactive(false);
++      markReadBtn.set_reactive(false);
++      doneBtn.set_label(_("Saving..."));
++      this._onMarkNotificationDone(notification, (success) => {
++        // A refresh or extension disable may already have destroyed the row.
++        if (destroyed) return;
++        doneBtn.set_label(success ? _("Done") : _("Retry Done"));
++        doneBtn.set_reactive(!success);
++        markReadBtn.set_reactive(!success);
++      });
++    });
++    return doneBtn;
++  }
++
+   _openNotification(notification) {
+     const enterpriseUrl = this._settings?.get_string("github-enterprise-url") || "";
+     const url =
+@@ -2242,43 +2269,15 @@
+   refreshNotifications(notifications) {
+     this._cachedNotifications = notifications;
+ 
+-    // Update the notifications container in-place if available
+-    if (this._notificationsContainer) {
+-      const unreadNotifications = notifications.filter((n) => n.unread);
+-      const totalPages = Math.ceil(
+-        unreadNotifications.length / NOTIFICATIONS_PAGE_SIZE,
+-      );
+-
+-      // Clamp page after mark-as-read may have reduced total pages
+-      if (totalPages > 0 && this._notificationsPage >= totalPages) {
+-        this._notificationsPage = totalPages - 1;
+-      }
+-
+-      const start = this._notificationsPage * NOTIFICATIONS_PAGE_SIZE;
+-      const displayNotifications = unreadNotifications.slice(
+-        start,
+-        start + NOTIFICATIONS_PAGE_SIZE,
+-      );
+-
+-      this._notificationsContainer.removeAll();
+-      for (const notification of displayNotifications) {
+-        const item = this._createNotificationItem(notification);
+-        this._notificationsContainer.addMenuItem(item);
+-      }
+-
+-      // Keep pager controls in sync after a notification is marked as read
+-      this._updatePagerControls(this._notificationsPagerItem, totalPages);
+-      return;
+-    }
+-
+-    // Fallback: re-render the whole menu
+-    if (this._cachedRepos && this._cachedUsername) {
++    // Rebuild counts, pagination and the empty state together. Other views
++    // use the updated cache when returning to repositories.
++    if (this._currentView === "repos" && this._cachedRepos && this._cachedUsername) {
+       this.updateMenu(
+         this._cachedRepos,
+         this._cachedUsername,
+         this._cachedUserInfo,
+         notifications,
+       );
+     }
+   }
+ }

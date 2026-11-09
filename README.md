@@ -484,16 +484,16 @@ python testing/test-shatter-shell.py
 
 ## GitHub Tray GNOME extension
 
-The package step runs `scripts/install-github-tray.sh` to install [debba/github-tray-gnome-extension](https://github.com/debba/github-tray-gnome-extension). It downloads the upstream **v19** release bundle, checks its pinned SHA-256 digest, validates GNOME compatibility and settings schemas, and installs it for your user with `gnome-extensions install`. This release supports GNOME Shell 45–51. Review the release and digest before updating the pin in the script.
+The package step runs `scripts/install-github-tray.sh` to install [debba/github-tray-gnome-extension](https://github.com/debba/github-tray-gnome-extension). It downloads the upstream **v19** release bundle, checks its pinned SHA-256 digest, validates GNOME compatibility and settings schemas, installs it for your user with `gnome-extensions install`, and applies this repo's [Done-button patch](patches/github-tray-v19-done.patch) ([upstream MIT license](patches/github-tray-LICENSE)). This release supports GNOME Shell 45–51. Review the release and digest before updating the pin in the script.
 
 ```bash
 ./scripts/install-github-tray.sh
 ./scripts/enable-gnome-extensions.sh
 ```
 
-A new extension may not be visible to the running Shell yet. On Wayland, log out and back in, then rerun the enable script if needed. No logout or Shell restart is performed automatically. The extension lives under `${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/github-tray@debba.github.com`; its compiled settings schema is included. Reruns preserve the pinned version or a newer compatible installation instead of downloading or downgrading it.
+A new extension may not be visible to the running Shell yet. On Wayland, log out and back in, then rerun the enable script if needed. No logout or Shell restart is performed automatically. The extension lives under `${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/github-tray@debba.github.com`; its compiled settings schema is included. Reruns apply the Done patch to an existing v19 installation without downloading it again, leave an already-patched v19 unchanged, and preserve newer compatible versions without patching or downgrading them. The patch is dry-run before any source changes; incompatible edits and symlinked source files are refused. GNOME/upstream extension updates can overwrite the local patch; rerun the installer for v19, and review/rebase the patch before using it with another release.
 
-Missing Arch dependencies (`curl`, `jq`, `unzip`, `glib2`, `libsoup3`, and `zenity`) are installed with pacman. GNOME must already be installed. Installation does not configure authentication or copy credentials from `gh` or other tools.
+Missing Arch dependencies (`curl`, `jq`, `unzip`, `glib2`, `libsoup3`, `zenity`, and `patch`) are installed with pacman. GNOME must already be installed. Installation does not configure authentication or copy credentials from `gh` or other tools.
 
 GitHub Tray is a panel widget, not a separate app. The installer runs `scripts/configure-github-tray.sh` to add a **GitHub Tray Settings** launcher under `${XDG_DATA_HOME:-$HOME/.local/share}/applications/`. Search for it in GNOME to open authentication/preferences directly. The widget's initial “configure token and username” message is not clickable, and its gear button may not appear until repositories have loaded. You can also open preferences with:
 
@@ -503,11 +503,13 @@ gnome-extensions prefs github-tray@debba.github.com
 
 To create or repair just the launcher for an existing installation, run `./scripts/configure-github-tray.sh`; this does not download, enable, or launch anything.
 
-In **Authentication**, enter your GitHub username and personal access token manually, pressing each field's Apply/checkmark button to save. Upstream documents `public_repo` for public repositories or `repo` for private repositories; use the least privileges you need. **Upstream stores the token in GSettings, not an encrypted keyring.** Never put tokens in this repo, scripts, or shell commands/history.
+In **Authentication**, enter your GitHub username and personal access token manually, pressing each field's Apply/checkmark button to save. Upstream documents `public_repo` for public repositories or `repo` for private repositories; use the least privileges you need. Notification APIs require a **classic** personal access token with `notifications` scope (or `repo`, which also grants notification access); fine-grained PATs are not supported by GitHub's notification endpoints. **Upstream stores the token in GSettings, not an encrypted keyring.** Never put tokens in this repo, scripts, or shell commands/history.
+
+Each notification has a **Done** button alongside the existing **Mark as read** checkmark. Done calls GitHub's `DELETE /notifications/threads/{id}` endpoint: it marks the notification as Done in GitHub's inbox, not just read locally. It does not delete the issue/PR or unsubscribe from the thread. The row and counts update only after GitHub confirms success; failed requests keep the notification and show **Retry Done**. To add it to an existing v19 installation, run `./scripts/install-github-tray.sh`, then log out and back in. The installer never reads or changes your token and makes no notification API calls.
 
 `SKIP_GITHUB_TRAY=1` skips installation, launcher setup, and enabling without disabling an existing installation. `SKIP_GNOME_EXTENSIONS=1` skips extension enabling only, consistent with Shatter Shell; package installation still creates the settings launcher.
 
-Offline tests (no downloads, package installs, or real GNOME changes):
+Offline tests (no downloads, package installs, or real GNOME changes; includes JS behavior tests when Node.js is available):
 
 ```bash
 python testing/test-github-tray.py

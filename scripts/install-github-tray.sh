@@ -28,6 +28,7 @@ VERSION=19
 DOWNLOAD_URL="https://github.com/debba/github-tray-gnome-extension/releases/download/v19/github-tray%40debba.github.com.zip"
 SHA256="f032fb932cf41bf3c64326b30ae4d432d7e7dd1ec23fd331a5c4d722a05c6a65"
 EXTENSION_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$UUID"
+DONE_PATCH="$SCRIPT_DIR/../patches/github-tray-v19-done.patch"
 
 if [[ -L "$EXTENSION_DIR" ]]; then
   echo "Refusing to replace a symlinked extension: $EXTENSION_DIR" >&2
@@ -35,7 +36,7 @@ if [[ -L "$EXTENSION_DIR" ]]; then
 fi
 
 missing_packages=()
-for package in curl jq unzip glib2 libsoup3 zenity; do
+for package in curl jq unzip glib2 libsoup3 zenity patch; do
   if ! pacman -Q "$package" >/dev/null 2>&1; then
     missing_packages+=("$package")
   fi
@@ -57,15 +58,43 @@ check_compatibility() {
   fi
 }
 
+# Only patch compatible v19 sources; dry-run the entire patch before writing.
+apply_done_patch() {
+  local directory=$1 file
+  local -a options=(--batch --force --fuzz=0 --no-backup-if-mismatch --reject-file=- -p1 -d "$directory")
+  for file in githubApi.js notificationManager.js extension.js ui.js; do
+    if [[ ! -f "$directory/$file" || -L "$directory/$file" ]]; then
+      echo "Refusing to patch missing or symlinked GitHub Tray source: $directory/$file" >&2
+      exit 1
+    fi
+  done
+  if patch "${options[@]}" --reverse --dry-run < "$DONE_PATCH" >/dev/null 2>&1; then
+    return
+  fi
+  if ! patch "${options[@]}" --forward --dry-run < "$DONE_PATCH" >/dev/null 2>&1; then
+    echo "GitHub Tray sources do not match the v19 Done patch; leaving the extension unchanged." >&2
+    exit 1
+  fi
+  if [[ "${2:-}" != "--dry-run" ]]; then
+    patch "${options[@]}" --forward < "$DONE_PATCH"
+    log_step "Added GitHub Tray Done action. Log out/in to load the updated extension."
+  fi
+}
+
 if [[ -f "$EXTENSION_DIR/metadata.json" ]] &&
     jq -e --arg uuid "$UUID" --argjson version "$VERSION" \
       '.uuid == $uuid and (.version | type == "number") and .version >= $version' \
       "$EXTENSION_DIR/metadata.json" >/dev/null; then
   check_compatibility "$EXTENSION_DIR/metadata.json"
+  if jq -e --argjson version "$VERSION" '.version == $version' "$EXTENSION_DIR/metadata.json" >/dev/null; then
+    apply_done_patch "$EXTENSION_DIR"
+  else
+    log_step "Preserving newer GitHub Tray; the local Done patch only supports v$VERSION"
+  fi
   if [[ ! -f "$EXTENSION_DIR/schemas/gschemas.compiled" ]]; then
     glib-compile-schemas --strict "$EXTENSION_DIR/schemas"
   fi
-  log_step "GitHub Tray v$VERSION or newer is already installed; leaving it unchanged"
+  log_step "GitHub Tray v$VERSION or newer is already installed; no download needed"
   "$SCRIPT_DIR/configure-github-tray.sh"
   exit 0
 fi
@@ -89,7 +118,9 @@ if ! jq -e --argjson version "$VERSION" '.version == $version' \
 fi
 # Validate schemas before replacing an existing installation.
 glib-compile-schemas --strict --dry-run "$TEMP_DIR/extension/schemas"
+apply_done_patch "$TEMP_DIR/extension" --dry-run
 gnome-extensions install --force "$BUNDLE"
+apply_done_patch "$EXTENSION_DIR"
 glib-compile-schemas --strict "$EXTENSION_DIR/schemas"
 "$SCRIPT_DIR/configure-github-tray.sh"
 
