@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -48,7 +49,7 @@ args = sys.argv[1:]
 live = Path(os.environ["TEST_LIVE"])
 if args == ["status"]:
     if os.environ.get("TEST_BAD_STATUS") or not os.environ.get("TEST_RUNNING"):
-        raise SystemExit(1)
+        raise SystemExit("injected status failure")
     print(live.read_text())
 elif args[0] == "check":
     path = Path(args[1])
@@ -104,6 +105,32 @@ else:
         before = self.snapshot()
         self.run_installer()
         self.assertEqual(self.snapshot(), before)
+
+    def test_stale_socket_allows_offline_install_and_uninstall(self):
+        self.app.mkdir(parents=True)
+        path = self.app / "herdr-app.sock"
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(path))
+        original_socket = path.stat().st_ino
+        shared = self.app / "shared.json"
+        shared.write_text('{"layout":"main","untouched":true}')
+        for args, layout in (((), "wt"), (("--uninstall",), "main")):
+            result = self.run_installer(*args, TEST_BAD_STATUS="1")
+            self.assertIn("socket is stale", result.stdout)
+            self.assertEqual(json.loads(shared.read_text()),
+                             {"layout": layout, "untouched": True})
+            self.assertEqual(path.stat().st_ino, original_socket)
+
+    def test_listening_socket_with_failed_status_does_not_write_state(self):
+        self.app.mkdir(parents=True)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(self.app / "herdr-app.sock"))
+            listener.listen()
+            before = self.snapshot()
+            result = self.run_installer(success=False, TEST_BAD_STATUS="1")
+            self.assertIn("socket exists", result.stderr)
+            self.assertIn("injected status failure", result.stderr)
+            self.assertEqual(self.snapshot(), before)
 
     def test_offline_activation_preserves_other_shared_state_and_backs_up(self):
         self.app.mkdir(parents=True)
@@ -169,6 +196,7 @@ else:
         before = self.snapshot()
         result = self.run_installer(success=False, TEST_BAD_STATUS="1")
         self.assertIn("socket exists", result.stderr)
+        self.assertIn("injected status failure", result.stderr)
         self.assertEqual(self.snapshot(), before)
 
     def test_symlink_targets_are_refused(self):

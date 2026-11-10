@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -82,8 +84,23 @@ def selection(app):
     result = subprocess.run(["herdr-app", "status"], capture_output=True, text=True, timeout=10)
     if result.returncode == 0:
         return True, json.loads(result.stdout)["layout"]
-    if (app / "herdr-app.sock").exists():
-        raise ValueError("Herdr's socket exists but status failed; resolve that before installing.")
+    path = safe_path(app, "herdr-app.sock")
+    if path.exists():
+        stale = False
+        if stat.S_ISSOCK(path.stat().st_mode):
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                probe.settimeout(2)
+                try:
+                    probe.connect(str(path))
+                except ConnectionRefusedError:
+                    stale = True
+                except OSError:
+                    pass  # Uncertain connectivity must not permit offline state writes.
+        if not stale:
+            detail = result.stderr.strip() or result.stdout.strip() or "No status output."
+            raise ValueError(
+                f"Herdr's socket exists but status failed; close Herdr and retry.\n{detail}")
+        print("Herdr's socket is stale (connection refused); configuring the closed app.")
     state = read_optional(safe_path(app, "shared.json"))
     shared = json.loads(state) if state is not None else {}
     if not isinstance(shared, dict):

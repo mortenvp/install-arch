@@ -358,6 +358,8 @@ The sources live in `patches/herdr-worktrees/`: five separately named `wt-*` mod
 
 Installation works before the first Herdr launch too. The script uses `HERDR_APP_HOME`, otherwise `$XDG_CONFIG_HOME/herdr-app`, otherwise `~/.config/herdr-app`. All five mods must pass `herdr-app check` before installation. Reruns leave identical files alone, back up updated owned files under `backups/wt-worktrees/`, and refuse edited/unrelated files or symlinked targets. A running app is switched through its command API; with Herdr closed, only the selected layout in `shared.json` is changed, preserving other keys. No settings, keybindings, terminal processes, Git repositories or existing worktree paths are changed. **Open worktree** still lists registered checkouts at any location. Uninstallation leaves backups, mod state, editor helpers and unrelated files alone.
 
+If `herdr-app status` fails but leaves a socket behind, the installer probes it. A refused connection is treated as a closed app, without deleting the stale socket. A listening socket or any uncertain connection error still blocks installation to avoid writing shared state while Herdr may be running; the status error is included in the diagnostic. Close Herdr and retry if this guard is triggered.
+
 `SKIP_HERDR=1` or `SKIP_HERDR_WORKTREES=1` skips setup; neither removes an existing installation. Test without a desktop session or network:
 
 ```bash
