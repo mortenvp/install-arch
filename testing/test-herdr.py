@@ -321,6 +321,7 @@ cp "$TEST_FIXTURES/$component.sh" "$4"
             "install-pi-dev",
             "install-pi-agent-stuff",
             "install-herdr-agent-resume",
+            "install-herdr-worktrees",
             "install-playwright",
         ):
             child = self.directory / f"{name}.sh"

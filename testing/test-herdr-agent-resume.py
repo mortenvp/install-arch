@@ -237,7 +237,7 @@ esac
     def test_pipeline_runs_after_herdr_and_pi_and_respects_skip(self):
         for name in ("install-devbox", "install-uv", "install-claude-code", "install-herdr",
                      "install-blip-ai", "install-tailscale", "install-pi-dev",
-                     "install-pi-agent-stuff", "install-playwright"):
+                     "install-pi-agent-stuff", "install-herdr-worktrees", "install-playwright"):
             child = self.directory / f"{name}.sh"
             child.write_text(f'#!{BASH}\nprintf "step {name}\\n" >> "$TEST_LOG"\n')
             child.chmod(0o755)

@@ -318,7 +318,7 @@ cp "$TEST_FIXTURES/$resource" "$4"
             "install-github-tray",
             "install-devbox", "install-uv", "install-claude-code", "install-herdr",
             "install-tailscale", "install-pi-dev", "install-pi-agent-stuff",
-            "install-herdr-agent-resume", "install-playwright",
+            "install-herdr-agent-resume", "install-herdr-worktrees", "install-playwright",
         ):
             child = self.directory / f"{name}.sh"
             child.write_text(f'#!{BASH}\nprintf "step {name}\\n" >> "$TEST_LOG"\n')

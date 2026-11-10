@@ -168,6 +168,7 @@ SKIP_SHELL=1 ./install.sh
 SKIP_CLAUDE_CODE=1 ./install.sh
 SKIP_HERDR=1 ./install.sh
 SKIP_HERDR_AGENT_RESUME=1 ./install.sh
+SKIP_HERDR_WORKTREES=1 ./install.sh
 SKIP_BLIP_AI=1 ./install.sh
 SKIP_PI_SETTINGS=1 ./install.sh
 SKIP_WARP_SETTINGS=1 ./install.sh
@@ -298,7 +299,7 @@ Run just this step as your normal user:
 ./scripts/install-herdr.sh
 ```
 
-The desktop app lives in `$XDG_DATA_HOME/herdr-app` (default `~/.local/share/herdr-app`), with `herdr-app` and `herdr-core` commands in `~/.local/bin` and a GNOME app-launcher entry. Upstream also adds `hc` if that command is not already taken. The terminal app is installed as `~/.local/bin/herdr`; run `herdr` in your existing terminal to start it. Existing desktop, core, and terminal installations are left alone; reruns install only missing components. The desktop app manages subsequent updates itself; use `herdr update` for the terminal app. This component installer does not change Herdr settings or add autostart entries. The full pipeline also installs the agent-resume mod described below.
+The desktop app lives in `$XDG_DATA_HOME/herdr-app` (default `~/.local/share/herdr-app`), with `herdr-app` and `herdr-core` commands in `~/.local/bin` and a GNOME app-launcher entry. Upstream also adds `hc` if that command is not already taken. The terminal app is installed as `~/.local/bin/herdr`; run `herdr` in your existing terminal to start it. Existing desktop, core, and terminal installations are left alone; reruns install only missing components. The desktop app manages subsequent updates itself; use `herdr update` for the terminal app. This component installer does not change Herdr settings or add autostart entries. The full pipeline also installs the agent-resume mod and selects the WT-compatible worktree layout described below.
 
 The script installs missing Arch dependencies (`curl` and `gawk`, plus `tar`, `libxkbcommon-x11`, and `vulkan-icd-loader` when desktop/core installation is needed) via pacman. The desktop app requires a desktop session and a working Vulkan driver; the script does not select or replace your GPU driver. Launch **Herdr** from GNOME or run `herdr-app`. Installing only the missing terminal command does not require desktop dependencies.
 
@@ -343,23 +344,44 @@ python testing/test-herdr-agent-resume.py
 node --test testing/test-herdr-pi-session-hook.mjs
 ```
 
+### Herdr worktree locations (same as WT)
+
+The full pipeline runs `scripts/install-herdr-worktrees.sh`. It installs and selects the personal **wt** layout, based on Herdr's main layout, so **New worktree** in the tab bar's **+** menu and the space's right-click menu creates `<main-checkout>.worktrees/<branch>`. Branch folder names use the same sanitization as `bin/wt-ui`. Creation from an existing linked worktree still uses the same main-checkout entry that WT reads from Git's worktree list. Only placement matches WT; Herdr's branch creation behavior is otherwise unchanged.
+
+```bash
+./scripts/install-herdr-worktrees.sh
+# Return to main and remove installer-owned customization files:
+./scripts/install-herdr-worktrees.sh --uninstall
+```
+
+The sources live in `patches/herdr-worktrees/`: five separately named `wt-*` mods and `layouts/wt.json`, reviewed against Herdr **0.1.14**. They are frozen personal copies, not edits to shipped mods. Herdr upgrades therefore leave them alone; other main-layout panels still use shipped mods and receive updates. The original **main**, **terminals**, and **win98** layouts are unchanged and retain Herdr's default paths. Keep **wt** selected for this behavior; rerunning the installer selects it again. Review native support and the copied mods before deliberately refreshing the snapshot—Herdr's future menu changes do not automatically propagate into these copies.
+
+Installation works before the first Herdr launch too. The script uses `HERDR_APP_HOME`, otherwise `$XDG_CONFIG_HOME/herdr-app`, otherwise `~/.config/herdr-app`. All five mods must pass `herdr-app check` before installation. Reruns leave identical files alone, back up updated owned files under `backups/wt-worktrees/`, and refuse edited/unrelated files or symlinked targets. A running app is switched through its command API; with Herdr closed, only the selected layout in `shared.json` is changed, preserving other keys. No settings, keybindings, terminal processes, Git repositories or existing worktree paths are changed. **Open worktree** still lists registered checkouts at any location. Uninstallation leaves backups, mod state, editor helpers and unrelated files alone.
+
+`SKIP_HERDR=1` or `SKIP_HERDR_WORKTREES=1` skips setup; neither removes an existing installation. Test without a desktop session or network:
+
+```bash
+python testing/test-herdr-worktrees.py
+node --test testing/test-herdr-worktree-mod.mjs
+```
+
 ### Herdr workaround review and retirement
 
 **These customizations are temporary workarounds, not features we want to maintain forever.** At each Herdr app/core update, and before updating a mod pin or local compatibility fix, check whether upstream now supports the behavior. Prefer native support and retire the redundant mod or patch once it is verified.
 
-Review baseline: **Herdr desktop 0.1.13**. Issue states below are from that review; recheck them rather than treating them as permanent.
+Original review baseline: **Herdr desktop 0.1.13**; the worktree layout was reviewed and added on **0.1.14**. Issue states below are from those reviews; recheck them rather than treating them as permanent.
 
 | Customization | Upstream tracking / what to review | When we can drop it |
 | --- | --- | --- |
 | Agent-resume mod (**installed**) | [herdr-app#406: reboot/session recovery](https://github.com/herdrdev/herdr-app/issues/406) (open); check desktop/core release notes and native agent-session metadata. | Native recovery automatically restores the correct Pi/Claude conversation in each kept pane after reboot, preserves launch restrictions, and does not restart intentionally exited agents or arbitrary commands. |
 | Local Pi recording fix (**installed**, `scripts/herdr-pi-session-hook.js`) | Review the [agent-resume fork](https://github.com/mortenvp/herdr-agent-resume), especially its Pi extension, before moving the pin. This patch may become unnecessary before the whole mod does. | The reviewed upstream extension waits for an actual saved transcript and retries ignored/failed hook attempts. Then remove our template substitution instead of carrying a duplicate fix. |
-| Sibling worktree folders (**planned; no custom mod installed yet**) | Desired layout: `<repo>.worktrees/<branch>`. [herdr-app#289](https://github.com/herdrdev/herdr-app/issues/289) (open) tracks the difficulty of replacing the worktree mod. [herdr#261](https://github.com/herdrdev/herdr/issues/261) requests this exact path layout but was closed as **not planned** and concerns the **terminal app**, not the desktop app. No dedicated desktop path-setting issue was found in this review. | A native desktop setting/template supports sibling placement relative to each repository's main checkout, including creation from an existing linked worktree. If a custom mod is added meanwhile, link its files and removal steps here. |
+| Sibling worktree folders (**installed**, `patches/herdr-worktrees/`) | `<repo>.worktrees/<branch>`, matching WT. [herdr-app#289](https://github.com/herdrdev/herdr-app/issues/289) (open at the 0.1.14 review) explains the five-mod/menu clone chain. [herdr#261](https://github.com/herdrdev/herdr/issues/261) was closed as **not planned** and concerns the **terminal app**, not desktop support. | Native desktop placement matches WT from both the main checkout and a linked worktree. Remove with `./scripts/install-herdr-worktrees.sh --uninstall`, then retire its pipeline step, templates, wrapper/helper and tests. |
 
 On each review:
 
 1. Check current desktop release notes, settings, shipped mods, and the linked issues. A closed issue, proposed PR, or terminal-only feature is **not** proof that the desktop behavior is available.
 2. In a backed-up test setup, disable the matching workaround and test the native replacement. For agent recovery, verify Pi and Claude across a controlled reboot; for worktree placement, verify the destination from both the main checkout and a linked worktree. Do not leave two automatic recovery mechanisms enabled together.
-3. If native support is sufficient, remove the workaround's pipeline call, installer/configuration, obsolete flags, patches, and workaround-only tests/docs as appropriate. Uninstall an existing agent-resume installation with `./scripts/install-herdr-agent-resume.sh --uninstall`; `SKIP_HERDR_AGENT_RESUME=1` only skips setup and **does not uninstall it**. Removing a worktree customization must not delete or move existing worktrees.
+3. If native support is sufficient, remove the workaround's pipeline call, installer/configuration, obsolete flags, patches, and workaround-only tests/docs as appropriate. Uninstall an existing agent-resume installation with `./scripts/install-herdr-agent-resume.sh --uninstall`; `SKIP_HERDR_AGENT_RESUME=1` only skips setup and **does not uninstall it**. Uninstall the worktree layout with `./scripts/install-herdr-worktrees.sh --uninstall`; its skip flag does not uninstall it. Removing a worktree customization must not delete or move existing worktrees.
 4. Record the reviewed versions, result, and remaining need in this section. If support is still missing, keep the workaround and its regression tests; do not update personal mod clones blindly, since they no longer receive shipped-mod fixes automatically.
 
 ## Blip AI (official Linux AppImage)

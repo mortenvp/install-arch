@@ -27,4 +27,5 @@ fi
 "$SCRIPT_DIR/install-pi-dev.sh"
 "$SCRIPT_DIR/install-pi-agent-stuff.sh"
 "$SCRIPT_DIR/install-herdr-agent-resume.sh"
+"$SCRIPT_DIR/install-herdr-worktrees.sh"
 "$SCRIPT_DIR/install-playwright.sh"
